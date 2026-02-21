@@ -24,6 +24,7 @@ export type MemberRiskRecord = {
   department: string
   gender: Gender
   age: number
+  weight: number // in kg
   bmi: number
   bloodPressure: string
   fastingBloodGlucoseMgDl: number
@@ -298,6 +299,11 @@ export function buildRiskRecord(input: MemberInputRecord, id: string): MemberRis
     throw new Error("bloodPressure must be in systolic/diastolic format, e.g. 120/80")
   }
 
+  // Calculate weight from BMI assuming average height of 1.7m
+  // BMI = weight / height², so weight = BMI * height²
+  const assumedHeight = 1.7 // meters
+  const weight = Math.round(input.bmi * assumedHeight * assumedHeight)
+
   const hypertensionRiskPct = clamp(
     Math.round(
       (input.age - 20) * 1.2 +
@@ -364,6 +370,7 @@ export function buildRiskRecord(input: MemberInputRecord, id: string): MemberRis
   return {
     ...input,
     id,
+    weight,
     hypertensionRiskPct,
     diabetesRiskPct,
     cardiovascularRiskPct,
