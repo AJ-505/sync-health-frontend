@@ -1,19 +1,43 @@
 /**
  * API Types for Sync Health Backend
- * 
- * TODO: Verify these types against actual backend responses once the backend is up.
- * Run curl commands to confirm the exact response shapes.
+ * Aligned with the provided FastAPI OpenAPI contract.
  */
 
 // =============================================================================
 // AUTH TYPES
 // =============================================================================
 
+export interface UserCreate {
+  username: string
+  email: string
+  password: string
+  phone_number: string
+}
+
 export interface LoginRequest {
+  username_or_email: string
+  password: string
+}
+
+/**
+ * Backward-compatible shape for callers that still send `email`.
+ * The client normalizes this to `username_or_email` before sending.
+ */
+export interface LegacyLoginRequest {
   email: string
   password: string
 }
 
+export interface Token {
+  access_token: string
+  token_type: string
+  role?: string
+}
+
+/**
+ * Frontend session user used by UI state.
+ * This is derived client-side because `/auth/login` returns token + role only.
+ */
 export interface User {
   id: string
   name: string
@@ -22,51 +46,44 @@ export interface User {
   organization: string
 }
 
-export interface LoginResponse {
-  token: string
-  user: User
-}
+export type RegisterUserResponse = unknown
 
 // =============================================================================
 // EMPLOYEE / FILTER TYPES
 // =============================================================================
 
-/** 
- * Employee record from /filter/all endpoint
- * TODO: Confirm field names and types with backend
- */
-export interface EmployeeRecord {
-  id: string
-  fullName: string
-  email: string
-  age: number
-  gender: "Male" | "Female"
-  department: string
-  weight: number
-  bmi: number
-  bloodPressureSystolic: number
-  bloodPressureDiastolic: number
-  fastingBloodGlucose: number
-  cholesterol: number
-  smokingStatus: string
-  exerciseFrequency: string
-  overallRisk: "Low" | "Moderate" | "High"
-  hypertensionRisk: number
-  diabetesRisk: number
-  cardiovascularRisk: number
+export interface FilterEmployeesParams {
+  gender?: string | null
+  department?: string | null
+  age?: number | null
+  min_age?: number | null
+  max_age?: number | null
+  weight?: number | null
+  min_weight?: number | null
+  max_weight?: number | null
 }
 
-export interface FilterAllResponse {
-  employees: EmployeeRecord[]
-}
+export type FilterEmployeesResponse = unknown
+export type GetAllEmployeesResponse = unknown
 
 // =============================================================================
-// API ERROR
+// API ERROR TYPES
 // =============================================================================
+
+export interface ValidationError {
+  loc: Array<string | number>
+  msg: string
+  type: string
+  input?: unknown
+  ctx?: Record<string, unknown>
+}
+
+export interface HTTPValidationError {
+  detail: ValidationError[]
+}
 
 export interface ApiError {
-  status: "error"
-  code: number
+  statusCode: number
   message: string
-  request_id?: string
+  details?: unknown
 }

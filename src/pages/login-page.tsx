@@ -6,20 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ModeToggle } from "@/components/mode-toggle"
-
-const BACKEND_URL = import.meta.env.VITE_PUBLIC_BACKEND_URL || "https://sync-health-backend-production.up.railway.app"
+import { apiClient, type User } from "@/lib/api"
 
 interface LoginCredentials {
-  email: string
+  usernameOrEmail: string
   password: string
-}
-
-interface User {
-  id: string
-  name: string
-  email: string
-  role: string
-  organization: string
 }
 
 interface LoginPageProps {
@@ -29,7 +20,7 @@ interface LoginPageProps {
 export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate()
   const [credentials, setCredentials] = useState<LoginCredentials>({
-    email: "",
+    usernameOrEmail: "",
     password: "",
   })
   const [showPassword, setShowPassword] = useState(false)
@@ -42,33 +33,23 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true)
 
     try {
-      const response = await fetch(`${BACKEND_URL}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(credentials),
+      const data = await apiClient.login({
+        username_or_email: credentials.usernameOrEmail,
+        password: credentials.password,
       })
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.message || "Invalid credentials")
-      }
-
-      const data = await response.json()
-      
-      // Store token if provided
-      if (data.token) {
-        localStorage.setItem("sync-health-token", data.token)
-      }
+      const identity = credentials.usernameOrEmail.trim()
+      const derivedName = identity.includes("@")
+        ? identity.split("@")[0]
+        : identity
 
       // Call the onLogin callback with user data
-      onLogin(data.user || {
-        id: "1",
-        name: data.name || "User",
-        email: credentials.email,
-        role: data.role || "HR",
-        organization: data.organization || "Organization",
+      onLogin({
+        id: derivedName || "1",
+        name: derivedName || "User",
+        email: identity.includes("@") ? identity : `${derivedName || "user"}@company.com`,
+        role: data.role || "user",
+        organization: "Organization",
       })
 
       navigate("/dashboard")
@@ -119,13 +100,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="username_or_email">Email or username</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@company.com"
-                  value={credentials.email}
-                  onChange={(e) => setCredentials((prev) => ({ ...prev, email: e.target.value }))}
+                  id="username_or_email"
+                  type="text"
+                  placeholder="you@company.com or your username"
+                  value={credentials.usernameOrEmail}
+                  onChange={(e) => setCredentials((prev) => ({ ...prev, usernameOrEmail: e.target.value }))}
                   className="bg-muted/30"
                   required
                   disabled={isLoading}
