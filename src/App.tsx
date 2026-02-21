@@ -29,13 +29,15 @@ const queryClient = new QueryClient({
 })
 
 const USER_STORAGE_KEY = "sync-health-user"
-const LEGACY_TOKEN_STORAGE_KEY = "sync-health-token"
+const TOKEN_STORAGE_KEY = "sync-health-token"
 
 function readStoredUser(): User | null {
-  localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY)
   const storedUser = localStorage.getItem(USER_STORAGE_KEY)
 
-  if (!storedUser) {
+  if (!token || !storedUser) {
+    localStorage.removeItem(USER_STORAGE_KEY)
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
     return null
   }
 
@@ -180,21 +182,18 @@ function AppRoutes({ isAuthenticated, user, onLogin, onLogout }: AppRoutesProps)
 
 export function App() {
   const [user, setUser] = useState<User | null>(readStoredUser)
-  const isAuthenticated = user !== null
+  const isAuthenticated = user !== null && Boolean(localStorage.getItem(TOKEN_STORAGE_KEY))
 
   const handleLogin = useCallback((userData: User) => {
     setUser(userData)
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData))
-    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
   }, [])
 
   const handleLogout = useCallback(() => {
-    void apiClient.logout().catch(() => {
-      // Session might already be gone; still clear local user state.
-    })
+    apiClient.logout()
     setUser(null)
     localStorage.removeItem(USER_STORAGE_KEY)
-    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
     queryClient.removeQueries({ queryKey: ["employees", "all"] })
   }, [])
 

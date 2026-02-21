@@ -36,13 +36,23 @@ class ApiClient {
     this.baseUrl = baseUrl
   }
 
+  private getToken(): string | null {
+    return localStorage.getItem("sync-health-token")
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    const token = this.getToken()
+
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...options.headers,
+    }
+
+    if (token) {
+      (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`
     }
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -138,13 +148,15 @@ class ApiClient {
       }),
     })
 
+    if (response.access_token) {
+      localStorage.setItem("sync-health-token", response.access_token)
+    }
+
     return response
   }
 
-  async logout(): Promise<void> {
-    await this.request("/auth/logout", {
-      method: "POST",
-    })
+  logout(): void {
+    localStorage.removeItem("sync-health-token")
   }
 
   // ===========================================================================
