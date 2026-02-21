@@ -1,19 +1,110 @@
 # Sync Health Frontend
 
-## Local Setup
+Frontend for the corporate chronic disease risk prediction platform.
 
-### 1. Prerequisites
-- Node.js 20+ (recommended)
-- `pnpm` installed globally
+Product theme: **Data -> Prevention**  
+PRD source of truth: `docs/PRD.md`
 
-### 2. Install dependencies
+## What This App Does
+
+- Authenticates HR users against the backend (`/auth/login`)
+- Fetches and displays employee records (`/filter/employees/all`)
+- Supports dashboard filtering by:
+  - gender
+  - department
+  - age range
+  - weight range
+- Shows employee-level health/risk details
+- Supports light/dark/system theming
+
+## Tech Stack
+
+- React 19 + TypeScript
+- Vite
+- React Router
+- TanStack Query
+- Tailwind CSS
+- shadcn/base-ui components
+- ESLint
+
+## Prerequisites
+
+- Node.js 20+
+- `pnpm` (required package manager)
+
+## Getting Started
+
+1. Install dependencies:
+
 ```bash
 pnpm install
 ```
 
-### 3. Start the dev server
+2. Create `.env` (or update existing) and set backend URL:
+
+```bash
+VITE_PUBLIC_BACKEND_URL=https://sync-health-backend-production.up.railway.app
+```
+
+3. Start development server:
+
 ```bash
 pnpm dev
 ```
 
-The app will run on the local Vite development URL shown in your terminal (usually `http://localhost:5173`).
+App runs on the Vite dev URL shown in terminal (usually `http://localhost:5173`).
+
+## Available Scripts
+
+- `pnpm dev` - Start local dev server
+- `pnpm build` - Type-check and create production build
+- `pnpm lint` - Run ESLint
+- `pnpm preview` - Preview production build locally
+
+## API Contract Notes
+
+This frontend is aligned with the FastAPI OpenAPI contract provided for:
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /filter/employees`
+- `GET /filter/employees/all`
+
+### Login payload
+
+`POST /auth/login` sends:
+
+```json
+{
+  "username_or_email": "string",
+  "password": "string"
+}
+```
+
+Auth token handling:
+
+- Reads/writes token key: `sync-health-token`
+- Reads/writes user key: `sync-health-user`
+
+## Project Structure (Key Files)
+
+- `src/App.tsx` - App root, routing, auth/session gating, employee query lifecycle
+- `src/pages/` - Page-level UI (`landing`, `login`, `dashboard`, `employee-details`)
+- `src/lib/api/client.ts` - API client and endpoint calls
+- `src/lib/api/types.ts` - API request/response contracts
+- `src/lib/employee-records.ts` - Maps backend employee payloads to UI member records
+- `src/components/` - shared UI components/theme provider
+
+## Validation Checklist (Before Handoff)
+
+Run both commands:
+
+```bash
+pnpm lint
+pnpm build
+```
+
+## Notes
+
+- Theme initialization is applied before React hydration in `index.html` to avoid light/dark flash.
+- Keep scope and feature behavior aligned with `docs/PRD.md`.
