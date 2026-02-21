@@ -1,64 +1,74 @@
-import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { Eye, EyeOff, HeartPulse, Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { ModeToggle } from "@/components/mode-toggle"
-import { apiClient, type User } from "@/lib/api"
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff, HeartPulse, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ModeToggle } from "@/components/mode-toggle";
+import { apiClient, type User } from "@/lib/api";
 
 interface LoginCredentials {
-  usernameOrEmail: string
-  password: string
+  usernameOrEmail: string;
+  password: string;
 }
 
 interface LoginPageProps {
-  onLogin: (user: User) => void
+  onLogin: (user: User) => void;
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
   const [credentials, setCredentials] = useState<LoginCredentials>({
     usernameOrEmail: "",
     password: "",
-  })
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setIsLoading(true)
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
 
     try {
       const data = await apiClient.login({
         username_or_email: credentials.usernameOrEmail,
         password: credentials.password,
-      })
+      });
 
-      const identity = credentials.usernameOrEmail.trim()
+      const identity = credentials.usernameOrEmail.trim();
       const derivedName = identity.includes("@")
         ? identity.split("@")[0]
-        : identity
+        : identity;
 
       // Call the onLogin callback with user data
       onLogin({
         id: derivedName || "1",
         name: derivedName || "User",
-        email: identity.includes("@") ? identity : `${derivedName || "user"}@company.com`,
+        email: identity.includes("@")
+          ? identity
+          : `${derivedName || "user"}@company.com`,
         role: data.role || "user",
         organization: "Organization",
-      })
+      });
 
-      navigate("/dashboard")
+      navigate("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed. Please try again.")
+      setError(
+        err instanceof Error ? err.message : "Login failed. Please try again.",
+      );
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -76,7 +86,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 <HeartPulse className="size-5 text-primary-foreground" />
               </div>
             </div>
-            <span className="text-xl font-semibold tracking-tight">Sync Health</span>
+            <span className="text-xl font-semibold tracking-tight">
+              Sync Health
+            </span>
           </Link>
           <ModeToggle />
         </div>
@@ -87,9 +99,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         <Card className="w-full max-w-md border-border/50 bg-card/80 backdrop-blur-sm animate-fade-in">
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-            <CardDescription>
-              Sign in to your HR dashboard
-            </CardDescription>
+            <CardDescription>Sign in to your HR dashboard</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -104,10 +114,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 <Input
                   id="username_or_email"
                   type="text"
-                  placeholder="you@company.com or your username"
+                  placeholder="you@company.com"
                   value={credentials.usernameOrEmail}
-                  onChange={(e) => setCredentials((prev) => ({ ...prev, usernameOrEmail: e.target.value }))}
-                  className="bg-muted/30"
+                  onChange={(e) =>
+                    setCredentials((prev) => ({
+                      ...prev,
+                      usernameOrEmail: e.target.value,
+                    }))
+                  }
+                  className="bg-muted/30 placeholder:text-black/50"
                   required
                   disabled={isLoading}
                 />
@@ -121,8 +136,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={credentials.password}
-                    onChange={(e) => setCredentials((prev) => ({ ...prev, password: e.target.value }))}
-                    className="bg-muted/30 pr-10"
+                    onChange={(e) =>
+                      setCredentials((prev) => ({
+                        ...prev,
+                        password: e.target.value,
+                      }))
+                    }
+                    className="pr-10 bg-muted/30 placeholder:text-black/50"
                     required
                     disabled={isLoading}
                   />
@@ -155,11 +175,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
             <div className="mt-6 text-center text-sm text-muted-foreground">
               <p>Demo credentials:</p>
-              <p className="font-mono text-xs mt-1">jennie@chowstack.ng / ChangeMe!2026</p>
+              <p className="font-mono text-xs mt-1">
+                jennie@chowstack.ng / ChangeMe!2026
+              </p>
             </div>
           </CardContent>
         </Card>
       </main>
     </div>
-  )
+  );
 }

@@ -5,11 +5,12 @@ import {
   Route,
   Routes,
 } from "react-router-dom"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query"
 
+import { Button } from "@/components/ui/button"
 import { ThemeProvider } from "@/components/theme-provider"
-import { CHOWDECK_MEMBERS, type MemberRiskRecord } from "@/lib/chowdeck-members"
-import type { User } from "@/lib/api"
+import { apiClient, type User } from "@/lib/api"
+import { mapGetAllEmployeesResponseToMembers } from "@/lib/employee-records"
 import {
   LandingPage,
   LoginPage,
@@ -27,34 +28,114 @@ const queryClient = new QueryClient({
   },
 })
 
+const USER_STORAGE_KEY = "sync-health-user"
+const TOKEN_STORAGE_KEY = "sync-health-token"
+
+function readStoredUser(): User | null {
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+  const storedUser = localStorage.getItem(USER_STORAGE_KEY)
+
+  if (!token || !storedUser) {
+    localStorage.removeItem(USER_STORAGE_KEY)
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(storedUser)
+    if (!parsed || typeof parsed !== "object") {
+      localStorage.removeItem(USER_STORAGE_KEY)
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+      return null
+    }
+
+    return parsed as User
+  } catch {
+    localStorage.removeItem(USER_STORAGE_KEY)
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    return null
+  }
+}
+
 // ============================================================================
 // APP ROUTES
 // ============================================================================
 
 interface AppRoutesProps {
-  members: MemberRiskRecord[]
+  isAuthenticated: boolean
   user: User | null
   onLogin: (user: User) => void
   onLogout: () => void
 }
 
-function AppRoutes({ members, user, onLogin, onLogout }: AppRoutesProps) {
+function EmployeeDataLoadingState() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <p className="text-muted-foreground">Loading employees...</p>
+    </div>
+  )
+}
+
+interface EmployeeDataErrorStateProps {
+  message: string
+  onRetry: () => Promise<unknown>
+}
+
+function EmployeeDataErrorState({ message, onRetry }: EmployeeDataErrorStateProps) {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-xl border border-destructive/30 bg-card p-6 text-center space-y-3">
+        <p className="font-medium">Could not load employee data.</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
+        <Button onClick={() => { void onRetry() }} variant="outline">
+          Retry
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function AppRoutes({ isAuthenticated, user, onLogin, onLogout }: AppRoutesProps) {
+  const employeesQuery = useQuery({
+    queryKey: ["employees", "all", user?.id ?? "anonymous"],
+    queryFn: () => apiClient.getAllEmployees(),
+    enabled: isAuthenticated,
+    select: mapGetAllEmployeesResponseToMembers,
+  })
+
+  const members = employeesQuery.data ?? []
+  const employeeDataError =
+    employeesQuery.error instanceof Error
+      ? employeesQuery.error.message
+      : "An unexpected error occurred while fetching employee records."
+
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={
-        user ? <Navigate replace to="/dashboard" /> : <LoginPage onLogin={onLogin} />
+        isAuthenticated ? <Navigate replace to="/dashboard" /> : <LoginPage onLogin={onLogin} />
       } />
       <Route path="/dashboard" element={
-        user ? (
-          <DashboardOverviewPage members={members} user={user} onLogout={onLogout} />
+        isAuthenticated ? (
+          employeesQuery.isPending ? (
+            <EmployeeDataLoadingState />
+          ) : employeesQuery.isError ? (
+            <EmployeeDataErrorState message={employeeDataError} onRetry={employeesQuery.refetch} />
+          ) : (
+            <DashboardOverviewPage members={members} user={user!} onLogout={onLogout} />
+          )
         ) : (
           <Navigate replace to="/login" />
         )
       } />
       <Route path="/dashboard/employee/:employeeId" element={
-        user ? (
-          <EmployeeDetailsPage members={members} />
+        isAuthenticated ? (
+          employeesQuery.isPending ? (
+            <EmployeeDataLoadingState />
+          ) : employeesQuery.isError ? (
+            <EmployeeDataErrorState message={employeeDataError} onRetry={employeesQuery.refetch} />
+          ) : (
+            <EmployeeDetailsPage members={members} />
+          )
         ) : (
           <Navigate replace to="/login" />
         )
@@ -69,22 +150,19 @@ function AppRoutes({ members, user, onLogin, onLogout }: AppRoutesProps) {
 // ============================================================================
 
 export function App() {
-  const [members] = useState<MemberRiskRecord[]>(CHOWDECK_MEMBERS)
-  const [user, setUser] = useState<User | null>(() => {
-    // Check if user data exists in localStorage
-    const stored = localStorage.getItem("sync-health-user")
-    return stored ? JSON.parse(stored) : null
-  })
+  const [user, setUser] = useState<User | null>(readStoredUser)
+  const isAuthenticated = user !== null && Boolean(localStorage.getItem(TOKEN_STORAGE_KEY))
 
   const handleLogin = (userData: User) => {
     setUser(userData)
-    localStorage.setItem("sync-health-user", JSON.stringify(userData))
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData))
   }
 
   const handleLogout = () => {
     setUser(null)
-    localStorage.removeItem("sync-health-user")
-    localStorage.removeItem("sync-health-token")
+    localStorage.removeItem(USER_STORAGE_KEY)
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    queryClient.removeQueries({ queryKey: ["employees", "all"] })
   }
 
   return (
@@ -92,7 +170,7 @@ export function App() {
       <ThemeProvider defaultTheme="dark" storageKey="sync-health-theme">
         <BrowserRouter>
           <AppRoutes 
-            members={members} 
+            isAuthenticated={isAuthenticated}
             user={user} 
             onLogin={handleLogin} 
             onLogout={handleLogout} 

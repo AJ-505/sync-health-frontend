@@ -21,23 +21,14 @@ export function AIChatSidebar() {
         </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col p-4 min-h-0">
-        <div className="flex-1 rounded-lg bg-muted/30 p-4 mb-4 overflow-y-auto">
+        <div className="flex-1 rounded-lg bg-muted/30 p-4 mb-4 overflow-y-auto max-h-60">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-primary/15 p-1.5 flex-shrink-0">
               <Bot className="size-3 text-primary" />
             </div>
             <div className="flex-1 space-y-2 min-w-0">
               <p className="text-sm text-muted-foreground">
-                Hello! I'm your health analytics assistant. I can help you:
-              </p>
-              <ul className="text-xs text-muted-foreground space-y-1">
-                <li>- Analyze risk patterns across departments</li>
-                <li>- Identify employees needing attention</li>
-                <li>- Generate intervention recommendations</li>
-                <li>- Explain health metrics</li>
-              </ul>
-              <p className="text-xs text-muted-foreground/60 italic">
-                (AI functionality coming soon)
+                Hello! I'm your health analytics assistant. How can I help you?
               </p>
             </div>
           </div>

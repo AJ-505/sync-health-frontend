@@ -63,8 +63,52 @@ export interface FilterEmployeesParams {
   max_weight?: number | null
 }
 
-export type FilterEmployeesResponse = unknown
-export type GetAllEmployeesResponse = unknown
+export interface EmployeeFamilyHistory {
+  asthma?: boolean | null
+  cancer?: boolean | null
+  diabetes?: boolean | null
+  heart_disease?: boolean | null
+  hypertension?: boolean | null
+  stroke?: boolean | null
+}
+
+export interface EmployeeHealth {
+  bmi?: number | null
+  weight_kg?: number | null
+  fasting_glucose_mg_dl?: number | null
+  total_cholesterol_mg_dl?: number | null
+  blood_pressure_systolic?: number | null
+  blood_pressure_diastolic?: number | null
+  smokes?: boolean | null
+  cigarettes_per_day?: number | null
+  exercise_days_per_week?: number | null
+  stress_level_1_10?: number | null
+  family_history?: EmployeeFamilyHistory | null
+  past_conditions?: string[] | null
+  current_conditions?: string[] | null
+  risk_flags?: string[] | null
+}
+
+export interface Employee {
+  org_id?: number
+  name?: string | null
+  gender?: string | null
+  department?: string | null
+  job_level?: string | null
+  marital_status?: string | null
+  summary?: string | null
+  dob?: string | null
+  employee_id?: string | null
+  location_city?: string | null
+  health?: EmployeeHealth | null
+}
+
+export interface GetAllEmployeesResponse {
+  count: number
+  employees: Employee[]
+}
+
+export type FilterEmployeesResponse = GetAllEmployeesResponse
 
 // =============================================================================
 // API ERROR TYPES

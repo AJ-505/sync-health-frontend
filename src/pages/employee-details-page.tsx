@@ -1,10 +1,9 @@
 import { useMemo } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
-import { AlertTriangle, ArrowLeft, HeartPulse, Mail, Shield } from "lucide-react"
+import { AlertTriangle, ArrowLeft, HeartPulse, Mail } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { RiskBadge } from "@/components/ui-custom"
 import type { MemberRiskRecord } from "@/lib/chowdeck-members"
 
 export function EmployeeDetailsPage({ members }: { members: MemberRiskRecord[] }) {
@@ -112,7 +111,6 @@ export function EmployeeDetailsPage({ members }: { members: MemberRiskRecord[] }
                       <span className="rounded-full bg-card/80 px-2.5 py-1 text-xs font-medium">
                         {employee.gender}
                       </span>
-                      <RiskBadge risk={employee.overallRisk} />
                     </div>
                   </div>
                 </div>
@@ -162,21 +160,6 @@ export function EmployeeDetailsPage({ members }: { members: MemberRiskRecord[] }
               </CardContent>
             </Card>
           </div>
-          
-          {/* Recommendation */}
-          <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="rounded-xl bg-primary/20 p-3">
-                  <Shield className="size-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Recommended Intervention</h3>
-                  <p className="mt-2 text-muted-foreground">{employee.recommendation}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </main>
     </div>

@@ -5,14 +5,26 @@ import { ModeToggle } from "@/components/mode-toggle"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { MemberRiskRecord } from "@/lib/chowdeck-members"
 import type { User } from "@/lib/api"
 import { AIChatSidebar } from "@/features/dashboard/components"
+import { capitalizeFirstLetter } from "@/lib/utils"
 
 // Get unique departments from members
 function getUniqueDepartments(members: MemberRiskRecord[]): string[] {
   return [...new Set(members.map(m => m.department))].sort()
 }
+
+const ALL_DEPARTMENTS_VALUE = "__all_departments__"
+const ALL_GENDERS_VALUE = "__all_genders__"
 
 interface DashboardOverviewPageProps {
   members: MemberRiskRecord[]
@@ -162,7 +174,7 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
             {/* Welcome Message */}
             <div className="space-y-1">
               <h2 className="text-2xl font-bold tracking-tight">
-                Welcome, {user.name}!
+                Welcome, {capitalizeFirstLetter(user.name)}!
               </h2>
               <p className="text-muted-foreground">Manage and monitor employee health risk profiles</p>
             </div>
@@ -221,7 +233,36 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                       {/* Department Dropdown */}
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Department</label>
-                        <div className="relative">
+                        <div className="hidden dark:block">
+                          <Select
+                            items={[
+                              { label: "All Departments", value: ALL_DEPARTMENTS_VALUE },
+                              ...departments.map((dept) => ({ label: dept, value: dept })),
+                            ]}
+                            value={filters.department || ALL_DEPARTMENTS_VALUE}
+                            onValueChange={(value) =>
+                              setFilters((f) => ({
+                                ...f,
+                                department: value === ALL_DEPARTMENTS_VALUE ? "" : value ?? "",
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-full bg-muted/30">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              <SelectGroup>
+                                <SelectItem value={ALL_DEPARTMENTS_VALUE}>All Departments</SelectItem>
+                                {departments.map((dept) => (
+                                  <SelectItem key={dept} value={dept}>
+                                    {dept}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="relative dark:hidden">
                           <select
                             value={filters.department}
                             onChange={(e) => setFilters(f => ({ ...f, department: e.target.value }))}
@@ -260,7 +301,34 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                       {/* Gender Dropdown */}
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gender</label>
-                        <div className="relative">
+                        <div className="hidden dark:block">
+                          <Select
+                            items={[
+                              { label: "All Genders", value: ALL_GENDERS_VALUE },
+                              { label: "Male", value: "Male" },
+                              { label: "Female", value: "Female" },
+                            ]}
+                            value={filters.gender || ALL_GENDERS_VALUE}
+                            onValueChange={(value) =>
+                              setFilters((f) => ({
+                                ...f,
+                                gender: value === ALL_GENDERS_VALUE ? "" : value ?? "",
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-full bg-muted/30">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              <SelectGroup>
+                                <SelectItem value={ALL_GENDERS_VALUE}>All Genders</SelectItem>
+                                <SelectItem value="Male">Male</SelectItem>
+                                <SelectItem value="Female">Female</SelectItem>
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="relative dark:hidden">
                           <select
                             value={filters.gender}
                             onChange={(e) => setFilters(f => ({ ...f, gender: e.target.value }))}
