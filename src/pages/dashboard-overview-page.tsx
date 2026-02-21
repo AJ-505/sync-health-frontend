@@ -233,48 +233,33 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                       {/* Department Dropdown */}
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Department</label>
-                        <div className="hidden dark:block">
-                          <Select
-                            items={[
-                              { label: "All Departments", value: ALL_DEPARTMENTS_VALUE },
-                              ...departments.map((dept) => ({ label: dept, value: dept })),
-                            ]}
-                            value={filters.department || ALL_DEPARTMENTS_VALUE}
-                            onValueChange={(value) =>
-                              setFilters((f) => ({
-                                ...f,
-                                department: value === ALL_DEPARTMENTS_VALUE ? "" : value ?? "",
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="w-full bg-muted/30">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent align="start">
-                              <SelectGroup>
-                                <SelectItem value={ALL_DEPARTMENTS_VALUE}>All Departments</SelectItem>
-                                {departments.map((dept) => (
-                                  <SelectItem key={dept} value={dept}>
-                                    {dept}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="relative dark:hidden">
-                          <select
-                            value={filters.department}
-                            onChange={(e) => setFilters(f => ({ ...f, department: e.target.value }))}
-                            className="w-full h-10 px-3 rounded-md border border-input bg-muted/30 text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="">All Departments</option>
-                            {departments.map((dept) => (
-                              <option key={dept} value={dept}>{dept}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-                        </div>
+                        <Select
+                          items={[
+                            { label: "All Departments", value: ALL_DEPARTMENTS_VALUE },
+                            ...departments.map((dept) => ({ label: dept, value: dept })),
+                          ]}
+                          value={filters.department || ALL_DEPARTMENTS_VALUE}
+                          onValueChange={(value) =>
+                            setFilters((f) => ({
+                              ...f,
+                              department: value === ALL_DEPARTMENTS_VALUE ? "" : value ?? "",
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="w-full bg-muted/30">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            <SelectGroup>
+                              <SelectItem value={ALL_DEPARTMENTS_VALUE}>All Departments</SelectItem>
+                              {departments.map((dept) => (
+                                <SelectItem key={dept} value={dept}>
+                                  {dept}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
                       </div>
                       
                       {/* Weight Range */}
@@ -301,45 +286,31 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                       {/* Gender Dropdown */}
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gender</label>
-                        <div className="hidden dark:block">
-                          <Select
-                            items={[
-                              { label: "All Genders", value: ALL_GENDERS_VALUE },
-                              { label: "Male", value: "Male" },
-                              { label: "Female", value: "Female" },
-                            ]}
-                            value={filters.gender || ALL_GENDERS_VALUE}
-                            onValueChange={(value) =>
-                              setFilters((f) => ({
-                                ...f,
-                                gender: value === ALL_GENDERS_VALUE ? "" : value ?? "",
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="w-full bg-muted/30">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent align="start">
-                              <SelectGroup>
-                                <SelectItem value={ALL_GENDERS_VALUE}>All Genders</SelectItem>
-                                <SelectItem value="Male">Male</SelectItem>
-                                <SelectItem value="Female">Female</SelectItem>
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="relative dark:hidden">
-                          <select
-                            value={filters.gender}
-                            onChange={(e) => setFilters(f => ({ ...f, gender: e.target.value }))}
-                            className="w-full h-10 px-3 rounded-md border border-input bg-muted/30 text-sm appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="">All Genders</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-                        </div>
+                        <Select
+                          items={[
+                            { label: "All Genders", value: ALL_GENDERS_VALUE },
+                            { label: "Male", value: "Male" },
+                            { label: "Female", value: "Female" },
+                          ]}
+                          value={filters.gender || ALL_GENDERS_VALUE}
+                          onValueChange={(value) =>
+                            setFilters((f) => ({
+                              ...f,
+                              gender: value === ALL_GENDERS_VALUE ? "" : value ?? "",
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="w-full bg-muted/30">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            <SelectGroup>
+                              <SelectItem value={ALL_GENDERS_VALUE}>All Genders</SelectItem>
+                              <SelectItem value="Male">Male</SelectItem>
+                              <SelectItem value="Female">Female</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                     
