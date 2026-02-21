@@ -138,3 +138,10 @@ This platform is:
 - Data-driven
 - Personalized
 - Preventive
+
+## 10. Non-MVP (Scale Phase)
+- HR/Admin PDF ingestion:
+  - Admins can upload unstructured PDF health documents.
+  - AI extraction will parse and normalize the PDF into the platform's database-ready schema.
+- Expanded file support:
+  - In addition to CSV, the platform accepts Excel spreadsheets (`.xlsx` / `.xls`) for employee data ingestion.

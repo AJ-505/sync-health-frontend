@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Activity,
   HeartPulse,
@@ -6,6 +6,7 @@ import {
   Menu,
   Search,
   ShieldPlus,
+  Upload,
   Users,
 } from "lucide-react"
 import {
@@ -17,12 +18,22 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useSearchParams,
 } from "react-router-dom"
 
 import { ModeToggle } from "@/components/mode-toggle"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Card,
   CardContent,
@@ -37,7 +48,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { CHOWDECK_MEMBERS } from "@/lib/chowdeck-members"
+import { CHOWDECK_MEMBERS, type MemberRiskRecord } from "@/lib/chowdeck-members"
+import { importMembersFromSpreadsheet } from "@/lib/member-import"
 
 const DUMMY_EMAIL = "emmanuel@chowdeck.com"
 
@@ -196,15 +208,59 @@ function LandingPage() {
   )
 }
 
-function AdminDashboardPage() {
-  const [query, setQuery] = useState("")
+type AdminDashboardPageProps = {
+  members: MemberRiskRecord[]
+  onMembersImported: (members: MemberRiskRecord[]) => void
+  onResetSeedData: () => void
+}
+
+function AdminDashboardPage({
+  members,
+  onMembersImported,
+  onResetSeedData,
+}: AdminDashboardPageProps) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const query = searchParams.get("q") ?? ""
+  const selectedMemberId = searchParams.get("member")
+  const [importMessage, setImportMessage] = useState<string>("")
+  const [importErrors, setImportErrors] = useState<string[]>([])
+  const [isImporting, setIsImporting] = useState(false)
+
+  const selectedMember = useMemo(
+    () => members.find((member) => member.id === selectedMemberId) ?? null,
+    [members, selectedMemberId]
+  )
+
+  useEffect(() => {
+    if (!selectedMemberId || selectedMember) return
+
+    const next = new URLSearchParams(searchParams)
+    next.delete("member")
+    setSearchParams(next, { replace: true })
+  }, [searchParams, selectedMember, selectedMemberId, setSearchParams])
+
+  function updateSearchParam(
+    key: "q" | "member",
+    value: string | null,
+    replace = false
+  ) {
+    const next = new URLSearchParams(searchParams)
+
+    if (!value || value.trim() === "") {
+      next.delete(key)
+    } else {
+      next.set(key, value)
+    }
+
+    setSearchParams(next, { replace })
+  }
 
   const filteredMembers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
 
-    if (!normalizedQuery) return CHOWDECK_MEMBERS
+    if (!normalizedQuery) return members
 
-    return CHOWDECK_MEMBERS.filter((member) => {
+    return members.filter((member) => {
       return (
         member.fullName.toLowerCase().includes(normalizedQuery) ||
         member.email.toLowerCase().includes(normalizedQuery) ||
@@ -212,25 +268,103 @@ function AdminDashboardPage() {
         member.overallRisk.toLowerCase().includes(normalizedQuery)
       )
     })
-  }, [query])
+  }, [members, query])
 
   const totals = useMemo(() => {
-    const highRisk = CHOWDECK_MEMBERS.filter((member) => member.overallRisk === "High").length
-    const moderateRisk = CHOWDECK_MEMBERS.filter(
-      (member) => member.overallRisk === "Moderate"
-    ).length
-    const lowRisk = CHOWDECK_MEMBERS.filter((member) => member.overallRisk === "Low").length
+    const highRisk = members.filter((member) => member.overallRisk === "High").length
+    const moderateRisk = members.filter((member) => member.overallRisk === "Moderate").length
+    const lowRisk = members.filter((member) => member.overallRisk === "Low").length
 
-    const hypertensionAvg = Math.round(
-      CHOWDECK_MEMBERS.reduce((acc, member) => acc + member.hypertensionRiskPct, 0) /
-        CHOWDECK_MEMBERS.length
-    )
+    const hypertensionAvg =
+      members.length > 0
+        ? Math.round(
+            members.reduce((acc, member) => acc + member.hypertensionRiskPct, 0) /
+              members.length
+          )
+        : 0
 
     return { highRisk, moderateRisk, lowRisk, hypertensionAvg }
-  }, [])
+  }, [members])
+
+  async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+
+    if (!file) return
+
+    setIsImporting(true)
+    setImportMessage("")
+    setImportErrors([])
+
+    try {
+      const result = await importMembersFromSpreadsheet(file)
+
+      if (result.members.length === 0) {
+        setImportMessage("No valid employee rows were imported.")
+        setImportErrors(result.errors)
+        return
+      }
+
+      onMembersImported(result.members)
+      setImportMessage(`Imported ${result.members.length} employee records from ${file.name}.`)
+      setImportErrors(result.errors)
+    } catch {
+      setImportMessage("Import failed. Please upload a valid CSV/XLSX file.")
+      setImportErrors([])
+    } finally {
+      setIsImporting(false)
+      event.target.value = ""
+    }
+  }
+
+  function resetToSeed() {
+    onResetSeedData()
+    setImportMessage("Reverted to seeded dataset.")
+    setImportErrors([])
+  }
 
   return (
     <section className="space-y-4 sm:space-y-6">
+      <Card className="border-border/70 bg-card/90">
+        <CardHeader>
+          <CardTitle className="text-xl sm:text-2xl">Data Import</CardTitle>
+          <CardDescription>
+            Upload employee records in CSV or Excel format (`.csv`, `.xlsx`, `.xls`).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            accept=".csv,.xlsx,.xls"
+            disabled={isImporting}
+            onChange={handleFileUpload}
+            type="file"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">
+              <Upload className="mr-1 size-3" /> Supported: CSV, XLSX, XLS
+            </Badge>
+            <Button onClick={resetToSeed} size="sm" variant="outline">
+              Use Seed Data
+            </Button>
+          </div>
+          {importMessage ? <p className="text-sm text-muted-foreground">{importMessage}</p> : null}
+          {importErrors.length > 0 ? (
+            <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm font-medium text-destructive">Import warnings</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                {importErrors.slice(0, 8).map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+              {importErrors.length > 8 ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  +{importErrors.length - 8} more warning(s)
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
       <Card className="border-border/70 bg-card/90">
         <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -251,7 +385,7 @@ function AdminDashboardPage() {
             <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
             <Input
               className="pl-9"
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => updateSearchParam("q", event.target.value, true)}
               placeholder="Search by name, email, department, or risk"
               value={query}
             />
@@ -262,70 +396,157 @@ function AdminDashboardPage() {
       <Card className="border-border/70 bg-card/90">
         <CardHeader>
           <CardTitle>Employee Risk Register ({filteredMembers.length})</CardTitle>
-          <CardDescription>50 Chowdeck members with complete screening and risk fields.</CardDescription>
+          <CardDescription>
+            {members.length} employee records with complete screening and risk fields.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto rounded-xl border border-border/70">
-            <table className="w-full min-w-[1480px] text-left text-sm">
-              <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Department</th>
-                  <th className="px-3 py-2">Age</th>
-                  <th className="px-3 py-2">BMI</th>
-                  <th className="px-3 py-2">Blood Pressure</th>
-                  <th className="px-3 py-2">Fasting Glucose</th>
-                  <th className="px-3 py-2">Cholesterol</th>
-                  <th className="px-3 py-2">Smoking</th>
-                  <th className="px-3 py-2">Exercise</th>
-                  <th className="px-3 py-2">Family History</th>
-                  <th className="px-3 py-2">Stress</th>
-                  <th className="px-3 py-2">HTN Risk</th>
-                  <th className="px-3 py-2">Diabetes Risk</th>
-                  <th className="px-3 py-2">Cardio Risk</th>
-                  <th className="px-3 py-2">Overall</th>
-                  <th className="px-3 py-2">Recommendation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMembers.map((member) => (
-                  <tr
-                    className="border-t border-border/60 align-top transition-colors hover:bg-muted/30"
-                    key={member.id}
-                  >
-                    <td className="space-y-0.5 px-3 py-2">
-                      <p className="font-medium">{member.fullName}</p>
-                      <p className="text-xs text-muted-foreground">{member.email}</p>
-                    </td>
-                    <td className="px-3 py-2">{member.department}</td>
-                    <td className="px-3 py-2">{member.age}</td>
-                    <td className="px-3 py-2">{member.bmi}</td>
-                    <td className="px-3 py-2">{member.bloodPressure}</td>
-                    <td className="px-3 py-2">{member.fastingBloodGlucoseMgDl} mg/dL</td>
-                    <td className="px-3 py-2">{member.cholesterolMgDl} mg/dL</td>
-                    <td className="px-3 py-2">{member.smokingStatus}</td>
-                    <td className="px-3 py-2">{member.exerciseFrequency}</td>
-                    <td className="px-3 py-2">{member.familyHistory}</td>
-                    <td className="px-3 py-2">{member.stressLevel}</td>
-                    <td className="px-3 py-2">{member.hypertensionRiskPct}%</td>
-                    <td className="px-3 py-2">{member.diabetesRiskPct}%</td>
-                    <td className="px-3 py-2">{member.cardiovascularRiskPct}%</td>
-                    <td className="px-3 py-2">
-                      <Badge variant={riskBadgeVariant(member.overallRisk)}>{member.overallRisk}</Badge>
-                    </td>
-                    <td className="max-w-80 px-3 py-2 text-muted-foreground">{member.recommendation}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="overflow-hidden rounded-xl border border-border/70">
+            <div className="hidden grid-cols-[minmax(14rem,2fr)_minmax(7rem,1fr)_minmax(8rem,1fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_auto] gap-3 bg-muted/60 px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase sm:grid">
+              <span>Name</span>
+              <span>Department</span>
+              <span>Overall Risk</span>
+              <span>HTN</span>
+              <span>Diabetes</span>
+              <span>Cardio</span>
+              <span className="text-right">Action</span>
+            </div>
+
+            {filteredMembers.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-muted-foreground">
+                No employee record matches your current search.
+              </div>
+            ) : null}
+
+            {filteredMembers.map((member) => (
+              <div
+                className="border-t border-border/60 first:border-t-0 transition-colors hover:bg-muted/30"
+                key={member.id}
+              >
+                <div className="grid grid-cols-[1fr_auto] items-start gap-3 px-4 py-3 sm:grid-cols-[minmax(14rem,2fr)_minmax(7rem,1fr)_minmax(8rem,1fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_minmax(6rem,0.8fr)_auto] sm:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{member.fullName}</p>
+                    <p className="text-xs text-muted-foreground truncate hidden sm:block">{member.email}</p>
+                  </div>
+                  <p className="hidden sm:block text-sm">{member.department}</p>
+                  <div className="hidden sm:block">
+                    <Badge variant={riskBadgeVariant(member.overallRisk)}>{member.overallRisk}</Badge>
+                  </div>
+                  <p className="hidden sm:block text-sm">{member.hypertensionRiskPct}%</p>
+                  <p className="hidden sm:block text-sm">{member.diabetesRiskPct}%</p>
+                  <p className="hidden sm:block text-sm">{member.cardiovascularRiskPct}%</p>
+                  <div className="flex justify-end">
+                    <Button
+                      className="h-8 px-3"
+                      onClick={() => updateSearchParam("member", member.id)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      View more
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) updateSearchParam("member", null, true)
+        }}
+        open={Boolean(selectedMember)}
+      >
+        <AlertDialogContent className="w-[min(92vw,720px)] max-w-none rounded-2xl p-5">
+          {selectedMember ? (
+            <>
+              <AlertDialogHeader className="place-items-start text-left">
+                <AlertDialogTitle>{selectedMember.fullName}</AlertDialogTitle>
+                <AlertDialogDescription>{selectedMember.email}</AlertDialogDescription>
+              </AlertDialogHeader>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Department</p>
+                  <p className="mt-1 text-sm font-medium">{selectedMember.department}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Overall Risk</p>
+                  <div className="mt-1">
+                    <Badge variant={riskBadgeVariant(selectedMember.overallRisk)}>
+                      {selectedMember.overallRisk}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Age / BMI</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedMember.age} years / {selectedMember.bmi}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Blood Pressure</p>
+                  <p className="mt-1 text-sm font-medium">{selectedMember.bloodPressure}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Fasting Glucose</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedMember.fastingBloodGlucoseMgDl} mg/dL
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Cholesterol</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedMember.cholesterolMgDl} mg/dL
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Lifestyle</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedMember.smokingStatus}, {selectedMember.exerciseFrequency}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Family History / Stress</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {selectedMember.familyHistory}, {selectedMember.stressLevel}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Hypertension Risk</p>
+                  <p className="mt-1 text-sm font-medium">{selectedMember.hypertensionRiskPct}%</p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Diabetes Risk</p>
+                  <p className="mt-1 text-sm font-medium">{selectedMember.diabetesRiskPct}%</p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3">
+                  <p className="text-xs text-muted-foreground">Cardiovascular Risk</p>
+                  <p className="mt-1 text-sm font-medium">{selectedMember.cardiovascularRiskPct}%</p>
+                </div>
+                <div className="rounded-xl border border-border/70 p-3 sm:col-span-2">
+                  <p className="text-xs text-muted-foreground">Recommendation</p>
+                  <p className="mt-1 text-sm font-medium">{selectedMember.recommendation}</p>
+                </div>
+              </div>
+
+              <AlertDialogFooter>
+                <AlertDialogCancel>Close</AlertDialogCancel>
+              </AlertDialogFooter>
+            </>
+          ) : null}
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }
 
-function StaffDashboardPage() {
+type StaffDashboardPageProps = {
+  members: MemberRiskRecord[]
+}
+
+function StaffDashboardPage({ members }: StaffDashboardPageProps) {
   return (
     <section className="space-y-4 sm:space-y-6">
       <Card className="border-border/70 bg-card/90">
@@ -345,11 +566,11 @@ function StaffDashboardPage() {
       <Card className="border-border/70 bg-card/90">
         <CardHeader>
           <CardTitle>Staff Directory Snapshot</CardTitle>
-          <CardDescription>50 members currently loaded from the MVP seed dataset.</CardDescription>
+          <CardDescription>{members.length} members currently loaded.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {CHOWDECK_MEMBERS.map((member) => (
+            {members.map((member) => (
               <div className="rounded-xl border border-border/70 p-3" key={member.id}>
                 <p className="text-sm font-medium">{member.fullName}</p>
                 <p className="text-xs text-muted-foreground">{member.email}</p>
@@ -363,7 +584,13 @@ function StaffDashboardPage() {
   )
 }
 
-function AppRoutes() {
+type AppRoutesProps = {
+  members: MemberRiskRecord[]
+  onMembersImported: (members: MemberRiskRecord[]) => void
+  onResetSeedData: () => void
+}
+
+function AppRoutes({ members, onMembersImported, onResetSeedData }: AppRoutesProps) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_10%,color-mix(in_oklch,var(--primary)_16%,transparent),transparent_45%),radial-gradient(circle_at_90%_0%,color-mix(in_oklch,var(--chart-2)_12%,transparent),transparent_40%)]" />
@@ -372,8 +599,17 @@ function AppRoutes() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/dashboard" element={<Navigate replace to="/dashboard/admin" />} />
-          <Route path="/dashboard/admin" element={<AdminDashboardPage />} />
-          <Route path="/dashboard/staff" element={<StaffDashboardPage />} />
+          <Route
+            path="/dashboard/admin"
+            element={
+              <AdminDashboardPage
+                members={members}
+                onMembersImported={onMembersImported}
+                onResetSeedData={onResetSeedData}
+              />
+            }
+          />
+          <Route path="/dashboard/staff" element={<StaffDashboardPage members={members} />} />
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>
       </main>
@@ -382,10 +618,16 @@ function AppRoutes() {
 }
 
 export function App() {
+  const [members, setMembers] = useState<MemberRiskRecord[]>(CHOWDECK_MEMBERS)
+
   return (
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
       <BrowserRouter>
-        <AppRoutes />
+        <AppRoutes
+          members={members}
+          onMembersImported={(nextMembers) => setMembers(nextMembers)}
+          onResetSeedData={() => setMembers(CHOWDECK_MEMBERS)}
+        />
       </BrowserRouter>
     </ThemeProvider>
   )
