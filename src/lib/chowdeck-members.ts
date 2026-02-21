@@ -2,12 +2,27 @@ export type SmokingStatus = "Non-smoker" | "Former smoker" | "Current smoker"
 export type ExerciseFrequency = "Rarely" | "1-2x / week" | "3-4x / week" | "5+x / week"
 export type StressLevel = "Low" | "Moderate" | "High"
 export type RiskLevel = "Low" | "Moderate" | "High"
+export type Gender = "Male" | "Female"
+
+// Past diseases that could be relevant for health risk assessment
+export type PastDisease = 
+  | "None"
+  | "Type 2 Diabetes"
+  | "Hypertension"
+  | "Heart Disease"
+  | "Stroke"
+  | "Asthma"
+  | "Obesity"
+  | "High Cholesterol"
+  | "Kidney Disease"
+  | "Thyroid Disorder"
 
 export type MemberRiskRecord = {
   id: string
   fullName: string
   email: string
   department: string
+  gender: Gender
   age: number
   bmi: number
   bloodPressure: string
@@ -17,6 +32,7 @@ export type MemberRiskRecord = {
   exerciseFrequency: ExerciseFrequency
   familyHistory: "Yes" | "No"
   stressLevel: StressLevel
+  pastDiseases: PastDisease[]
   hypertensionRiskPct: number
   diabetesRiskPct: number
   cardiovascularRiskPct: number
@@ -28,6 +44,7 @@ export type MemberInputRecord = {
   fullName: string
   email: string
   department: string
+  gender: Gender
   age: number
   bmi: number
   bloodPressure: string
@@ -37,6 +54,7 @@ export type MemberInputRecord = {
   exerciseFrequency: ExerciseFrequency
   familyHistory: "Yes" | "No"
   stressLevel: StressLevel
+  pastDiseases: PastDisease[]
 }
 
 export type ParsedMembersResult = {
@@ -44,41 +62,43 @@ export type ParsedMembersResult = {
   errors: string[]
 }
 
-const firstNames = [
-  "Aisha",
-  "Emeka",
-  "Tosin",
-  "Bolanle",
-  "Chioma",
-  "Ifeanyi",
-  "Zainab",
-  "Damilola",
-  "Chinedu",
-  "Kemi",
+// Diverse Nigerian first names with associated genders
+const maleFirstNames = [
+  "Emeka", "Chinedu", "Ifeanyi", "Oluwaseun", "Adebayo", 
+  "Tunde", "Chukwudi", "Obinna", "Femi", "Yusuf",
+  "Ibrahim", "Musa", "Kunle", "Segun", "Kayode",
+  "Nnadi", "Obiora", "Ikenna", "Uchenna", "Nnamdi"
 ]
 
+const femaleFirstNames = [
+  "Aisha", "Chioma", "Zainab", "Ngozi", "Funke",
+  "Adaeze", "Blessing", "Kemi", "Tosin", "Amina",
+  "Fatima", "Halima", "Bola", "Yetunde", "Damilola",
+  "Chiamaka", "Nneka", "Ifeoma", "Oluchi", "Adanna"
+]
+
+// More diverse last names
 const lastNames = [
-  "Adeyemi",
-  "Okafor",
-  "Ibrahim",
-  "Afolayan",
-  "Balogun",
-  "Umeh",
-  "Nwosu",
-  "Bello",
-  "Lawal",
-  "Ogunleye",
+  "Adeyemi", "Okafor", "Ibrahim", "Afolayan", "Balogun",
+  "Umeh", "Nwosu", "Bello", "Lawal", "Ogunleye",
+  "Eze", "Okoro", "Musa", "Abdullahi", "Okonkwo",
+  "Abubakar", "Mohammed", "Yusuf", "Chukwu", "Nnamdi",
+  "Olawale", "Adeniyi", "Oyelaran", "Akinyemi", "Babatunde",
+  "Ogundipe", "Ajayi", "Oladipo", "Fashola", "Onuoha",
+  "Nwachukwu", "Igwe", "Onyeka", "Anyanwu", "Nwankwo"
 ]
 
 const departments = [
   "Operations",
-  "People",
+  "People & Culture",
   "Finance",
   "Engineering",
   "Growth",
   "Customer Success",
   "Product",
   "Compliance",
+  "Marketing",
+  "Legal"
 ]
 
 const exercisePatterns: ExerciseFrequency[] = [
@@ -89,6 +109,19 @@ const exercisePatterns: ExerciseFrequency[] = [
 ]
 
 const stressPatterns: StressLevel[] = ["Low", "Moderate", "High"]
+
+const pastDiseaseOptions: PastDisease[] = [
+  "None",
+  "Type 2 Diabetes",
+  "Hypertension", 
+  "Heart Disease",
+  "Stroke",
+  "Asthma",
+  "Obesity",
+  "High Cholesterol",
+  "Kidney Disease",
+  "Thyroid Disorder"
+]
 
 const smokingStatusMap: Record<string, SmokingStatus> = {
   "nonsmoker": "Non-smoker",
@@ -134,11 +167,20 @@ const familyHistoryMap: Record<string, "Yes" | "No"> = {
   "0": "No",
 }
 
+const genderMap: Record<string, Gender> = {
+  "male": "Male",
+  "m": "Male",
+  "female": "Female",
+  "f": "Female",
+}
+
 const importHeaderAliases: Record<string, keyof MemberInputRecord> = {
   fullname: "fullName",
   name: "fullName",
   email: "email",
   department: "department",
+  gender: "gender",
+  sex: "gender",
   age: "age",
   bmi: "bmi",
   bloodpressure: "bloodPressure",
@@ -155,12 +197,15 @@ const importHeaderAliases: Record<string, keyof MemberInputRecord> = {
   familyhistory: "familyHistory",
   stresslevel: "stressLevel",
   stress: "stressLevel",
+  pastdiseases: "pastDiseases",
+  diseases: "pastDiseases",
 }
 
 const requiredInputFields: Array<keyof MemberInputRecord> = [
   "fullName",
   "email",
   "department",
+  "gender",
   "age",
   "bmi",
   "bloodPressure",
@@ -218,16 +263,32 @@ function getOverallRisk(
   return "Low"
 }
 
-function getRecommendation(overallRisk: RiskLevel): string {
+function getRecommendation(overallRisk: RiskLevel, pastDiseases: PastDisease[]): string {
+  const hasPastConditions = pastDiseases.some(d => d !== "None")
+  
   if (overallRisk === "High") {
-    return "Refer to partner clinic and enroll in tracked wellness intervention."
+    if (hasPastConditions) {
+      return "URGENT: Schedule immediate clinic referral. Enroll in intensive wellness monitoring program with weekly check-ins. Prior conditions require specialized attention."
+    }
+    return "Refer to partner clinic and enroll in tracked wellness intervention with bi-weekly monitoring."
   }
 
   if (overallRisk === "Moderate") {
+    if (hasPastConditions) {
+      return "Assign personalized fitness and diet plan with bi-weekly check-ins. Monitor prior conditions closely."
+    }
     return "Assign a personalized fitness and diet plan with monthly check-ins."
   }
 
   return "Maintain current lifestyle and send quarterly prevention tips."
+}
+
+// Seeded random for consistent generation
+function seededRandom(seed: number): () => number {
+  return function() {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    return seed / 0x7fffffff
+  }
 }
 
 export function buildRiskRecord(input: MemberInputRecord, id: string): MemberRiskRecord {
@@ -248,7 +309,8 @@ export function buildRiskRecord(input: MemberInputRecord, id: string): MemberRis
           : input.smokingStatus === "Former smoker"
             ? 4
             : 0) +
-        (input.familyHistory === "Yes" ? 8 : 0)
+        (input.familyHistory === "Yes" ? 8 : 0) +
+        (input.pastDiseases.includes("Hypertension") ? 15 : 0)
     ),
     5,
     95
@@ -266,7 +328,9 @@ export function buildRiskRecord(input: MemberInputRecord, id: string): MemberRis
             : input.exerciseFrequency === "3-4x / week"
               ? 2
               : 0) +
-        (input.familyHistory === "Yes" ? 9 : 0)
+        (input.familyHistory === "Yes" ? 9 : 0) +
+        (input.pastDiseases.includes("Type 2 Diabetes") ? 20 : 0) +
+        (input.pastDiseases.includes("Obesity") ? 10 : 0)
     ),
     4,
     94
@@ -282,7 +346,10 @@ export function buildRiskRecord(input: MemberInputRecord, id: string): MemberRis
           : input.smokingStatus === "Former smoker"
             ? 5
             : 0) +
-        (input.stressLevel === "High" ? 8 : input.stressLevel === "Moderate" ? 4 : 0)
+        (input.stressLevel === "High" ? 8 : input.stressLevel === "Moderate" ? 4 : 0) +
+        (input.pastDiseases.includes("Heart Disease") ? 25 : 0) +
+        (input.pastDiseases.includes("Stroke") ? 20 : 0) +
+        (input.pastDiseases.includes("High Cholesterol") ? 12 : 0)
     ),
     6,
     93
@@ -301,33 +368,62 @@ export function buildRiskRecord(input: MemberInputRecord, id: string): MemberRis
     diabetesRiskPct,
     cardiovascularRiskPct,
     overallRisk,
-    recommendation: getRecommendation(overallRisk),
+    recommendation: getRecommendation(overallRisk, input.pastDiseases),
   }
 }
 
 function buildMember(index: number): MemberRiskRecord {
-  const firstName = firstNames[index % firstNames.length]
-  const lastName = lastNames[Math.floor(index / firstNames.length) % lastNames.length]
+  const random = seededRandom(index * 7919) // Prime seed for variety
+  
+  // Randomly assign gender
+  const gender: Gender = random() > 0.5 ? "Male" : "Female"
+  
+  // Pick first name based on gender
+  const firstNameList = gender === "Male" ? maleFirstNames : femaleFirstNames
+  const firstName = firstNameList[Math.floor(random() * firstNameList.length)]
+  
+  // Pick last name with more variety - use combination of index and random
+  const lastNameIndex = Math.floor(random() * lastNames.length)
+  const lastName = lastNames[lastNameIndex]
 
-  const age = 22 + ((index * 3) % 28)
-  const bmi = Number((18.6 + ((index * 1.65) % 13.8)).toFixed(1))
-  const systolic = 104 + ((index * 5) % 48)
-  const diastolic = 66 + ((index * 3) % 30)
+  const age = 22 + Math.floor(random() * 38) // 22-60 years
+  const bmi = Number((18.5 + random() * 14).toFixed(1)) // 18.5-32.5
+  const systolic = 100 + Math.floor(random() * 60) // 100-160
+  const diastolic = 60 + Math.floor(random() * 40) // 60-100
+
+  // Generate past diseases - most people have none, some have 1-2
+  const pastDiseases: PastDisease[] = []
+  if (random() < 0.3) { // 30% chance of having a past disease
+    const numDiseases = random() < 0.7 ? 1 : 2
+    const availableDiseases = pastDiseaseOptions.filter(d => d !== "None")
+    for (let i = 0; i < numDiseases; i++) {
+      const diseaseIndex = Math.floor(random() * availableDiseases.length)
+      const disease = availableDiseases[diseaseIndex]
+      if (!pastDiseases.includes(disease)) {
+        pastDiseases.push(disease)
+      }
+    }
+  }
+  if (pastDiseases.length === 0) {
+    pastDiseases.push("None")
+  }
 
   const input: MemberInputRecord = {
     fullName: `${firstName} ${lastName}`,
-    email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${index + 1}@chowdeck.com`,
+    email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@chowdeck.com`,
     department: departments[index % departments.length],
+    gender,
     age,
     bmi,
     bloodPressure: `${systolic}/${diastolic}`,
-    fastingBloodGlucoseMgDl: 76 + ((index * 4) % 58),
-    cholesterolMgDl: 145 + ((index * 7) % 120),
+    fastingBloodGlucoseMgDl: 70 + Math.floor(random() * 60), // 70-130
+    cholesterolMgDl: 140 + Math.floor(random() * 120), // 140-260
     smokingStatus:
-      index % 8 === 0 ? "Current smoker" : index % 5 === 0 ? "Former smoker" : "Non-smoker",
-    exerciseFrequency: exercisePatterns[index % exercisePatterns.length],
-    familyHistory: index % 3 === 0 ? "Yes" : "No",
-    stressLevel: stressPatterns[(index + 1) % stressPatterns.length],
+      random() < 0.1 ? "Current smoker" : random() < 0.25 ? "Former smoker" : "Non-smoker",
+    exerciseFrequency: exercisePatterns[Math.floor(random() * exercisePatterns.length)],
+    familyHistory: random() < 0.35 ? "Yes" : "No",
+    stressLevel: stressPatterns[Math.floor(random() * stressPatterns.length)],
+    pastDiseases,
   }
 
   return buildRiskRecord(input, `chowdeck-${index + 1}`)
@@ -394,6 +490,12 @@ export function parseImportedMembers(rows: Array<Record<string, unknown>>): Pars
       return
     }
 
+    const genderResult = parseEnum(rowIndex, "gender", mapped.gender, genderMap)
+    if (genderResult.error) {
+      errors.push(genderResult.error)
+      return
+    }
+
     const smokingResult = parseEnum(rowIndex, "smokingStatus", mapped.smokingStatus, smokingStatusMap)
     if (smokingResult.error) {
       errors.push(smokingResult.error)
@@ -425,6 +527,15 @@ export function parseImportedMembers(rows: Array<Record<string, unknown>>): Pars
       return
     }
 
+    // Parse past diseases - could be comma-separated string or array
+    let pastDiseases: PastDisease[] = ["None"]
+    if (mapped.pastDiseases) {
+      const diseasesStr = normalizeText(mapped.pastDiseases)
+      if (diseasesStr && diseasesStr.toLowerCase() !== "none") {
+        pastDiseases = diseasesStr.split(",").map(d => d.trim()) as PastDisease[]
+      }
+    }
+
     try {
       members.push(
         buildRiskRecord(
@@ -432,6 +543,7 @@ export function parseImportedMembers(rows: Array<Record<string, unknown>>): Pars
             fullName: normalizeText(mapped.fullName),
             email: normalizeText(mapped.email),
             department: normalizeText(mapped.department),
+            gender: genderResult.value!,
             age,
             bmi,
             bloodPressure,
@@ -441,6 +553,7 @@ export function parseImportedMembers(rows: Array<Record<string, unknown>>): Pars
             exerciseFrequency: exerciseResult.value!,
             familyHistory: familyResult.value!,
             stressLevel: stressResult.value!,
+            pastDiseases,
           },
           `imported-${index + 1}`
         )
