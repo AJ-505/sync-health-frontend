@@ -1,3 +1,19 @@
-# React + TypeScript + Vite + shadcn/ui
+# Sync Health Frontend
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+## Local Setup
+
+### 1. Prerequisites
+- Node.js 20+ (recommended)
+- `pnpm` installed globally
+
+### 2. Install dependencies
+```bash
+pnpm install
+```
+
+### 3. Start the dev server
+```bash
+pnpm dev
+```
+
+The app will run on the local Vite development URL shown in your terminal (usually `http://localhost:5173`).
