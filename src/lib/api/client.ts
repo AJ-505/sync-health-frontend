@@ -17,6 +17,18 @@ import type {
 
 const BACKEND_URL = import.meta.env.VITE_PUBLIC_BACKEND_URL || "https://sync-health-backend-production.up.railway.app"
 
+export class ApiRequestError extends Error {
+  statusCode: number
+  details?: unknown
+
+  constructor(message: string, statusCode: number, details?: unknown) {
+    super(message)
+    this.name = "ApiRequestError"
+    this.statusCode = statusCode
+    this.details = details
+  }
+}
+
 class ApiClient {
   private baseUrl: string
 
@@ -24,23 +36,13 @@ class ApiClient {
     this.baseUrl = baseUrl
   }
 
-  private getToken(): string | null {
-    return localStorage.getItem("sync-health-token")
-  }
-
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const token = this.getToken()
-    
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...options.headers,
-    }
-
-    if (token) {
-      (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`
     }
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -53,7 +55,11 @@ class ApiClient {
 
     if (!response.ok) {
       const error = this.toApiError(response.status, response.statusText, payload)
-      throw new Error(error.message || "Request failed")
+      throw new ApiRequestError(
+        error.message || "Request failed",
+        error.statusCode,
+        error.details
+      )
     }
 
     return payload as T
@@ -132,16 +138,13 @@ class ApiClient {
       }),
     })
 
-    // Store token on successful login
-    if (response.access_token) {
-      localStorage.setItem("sync-health-token", response.access_token)
-    }
-
     return response
   }
 
-  logout(): void {
-    localStorage.removeItem("sync-health-token")
+  async logout(): Promise<void> {
+    await this.request("/auth/logout", {
+      method: "POST",
+    })
   }
 
   // ===========================================================================
@@ -160,6 +163,17 @@ class ApiClient {
   // Backwards-compatible alias
   async getEmployees(): Promise<GetAllEmployeesResponse> {
     return this.getAllEmployees()
+  }
+
+  // ===========================================================================
+  // AI
+  // ===========================================================================
+
+  async analyseWithAI(prompt: string): Promise<string> {
+    return this.request<string>("/ai/analyse", {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
+    })
   }
 }
 

@@ -111,6 +111,50 @@ export interface GetAllEmployeesResponse {
 export type FilterEmployeesResponse = GetAllEmployeesResponse
 
 // =============================================================================
+// AI TYPES
+// =============================================================================
+
+export interface AIAnalyseRequest {
+  prompt: string
+}
+
+/** The /ai/analyse endpoint returns a plain string (Gemini's text response). */
+export type AIAnalyseResponse = string
+
+export interface ChatMessage {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  timestamp: number
+}
+
+/**
+ * Represents a single employee's AI-derived risk score for a specific disease.
+ * This is parsed from the AI response and used to overlay the dashboard table.
+ */
+export interface AIRiskEntry {
+  /** Employee name as returned by AI (used for fuzzy-matching to MemberRiskRecord) */
+  employeeName: string
+  /** Matched MemberRiskRecord id (resolved client-side) */
+  memberId: string | null
+  /** Risk score percentage (0-100) */
+  riskScore: number
+}
+
+/**
+ * The parsed result of an AI risk analysis response.
+ * Passed from the chat sidebar to the dashboard to drive the filtered table view.
+ */
+export interface AIRiskFilterData {
+  /** The disease/condition the user asked about */
+  disease: string
+  /** Employees with their risk scores, sorted descending */
+  entries: AIRiskEntry[]
+  /** The raw AI response text for reference */
+  rawResponse: string
+}
+
+// =============================================================================
 // API ERROR TYPES
 // =============================================================================
 

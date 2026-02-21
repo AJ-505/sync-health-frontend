@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
-import { ArrowRight, ChevronDown, Filter, HeartPulse, LogOut, Search, X } from "lucide-react"
+import { ArrowRight, ChevronDown, Filter, HeartPulse, LogOut, Search, Sparkles, X } from "lucide-react"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { MemberRiskRecord } from "@/lib/chowdeck-members"
-import type { User } from "@/lib/api"
+import type { User, AIRiskFilterData } from "@/lib/api"
 import { AIChatSidebar } from "@/features/dashboard/components"
 import { capitalizeFirstLetter } from "@/lib/utils"
 
@@ -32,12 +32,33 @@ interface DashboardOverviewPageProps {
   onLogout: () => void
 }
 
+/**
+ * Get a color class for a risk score percentage.
+ */
+function getRiskScoreColor(score: number): string {
+  if (score >= 67) return "text-destructive"
+  if (score >= 40) return "text-warning"
+  return "text-success"
+}
+
+/**
+ * Get a background class for a risk score badge.
+ */
+function getRiskScoreBg(score: number): string {
+  if (score >= 67) return "bg-destructive/15"
+  if (score >= 40) return "bg-warning/15"
+  return "bg-success/15"
+}
+
 export function DashboardOverviewPage({ members, user, onLogout }: DashboardOverviewPageProps) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const query = searchParams.get("q") ?? ""
   const tableRef = useRef<HTMLDivElement>(null)
   const [showScrollHint, setShowScrollHint] = useState(true)
+  
+  // AI risk filter state
+  const [aiRiskFilter, setAIRiskFilter] = useState<AIRiskFilterData | null>(null)
   
   // Debounced search
   const [debouncedQuery, setDebouncedQuery] = useState(query)
@@ -89,10 +110,22 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
     return () => table.removeEventListener("scroll", handleScroll)
   }, [])
 
+  // Build a lookup map of memberId -> riskScore when AI filter is active
+  const aiRiskMap = useMemo(() => {
+    if (!aiRiskFilter) return null
+    const map = new Map<string, number>()
+    for (const entry of aiRiskFilter.entries) {
+      if (entry.memberId) {
+        map.set(entry.memberId, entry.riskScore)
+      }
+    }
+    return map
+  }, [aiRiskFilter])
+
   const filteredMembers = useMemo(() => {
     const normalizedQuery = debouncedQuery.trim().toLowerCase()
 
-    return members.filter((member) => {
+    let result = members.filter((member) => {
       // Text search
       if (normalizedQuery) {
         const matchesText = 
@@ -118,9 +151,22 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
       
       return true
     })
-  }, [members, debouncedQuery, filters])
+
+    // When AI risk filter is active, further restrict to matched members and sort by risk score
+    if (aiRiskMap) {
+      result = result
+        .filter((member) => aiRiskMap.has(member.id))
+        .sort((a, b) => {
+          const scoreA = aiRiskMap.get(a.id) ?? 0
+          const scoreB = aiRiskMap.get(b.id) ?? 0
+          return scoreB - scoreA
+        })
+    }
+
+    return result
+  }, [members, debouncedQuery, filters, aiRiskMap])
   
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilters({
       ageMin: "",
       ageMax: "",
@@ -129,14 +175,31 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
       weightMax: "",
       gender: "",
     })
-  }
+  }, [])
+  
+  const clearAllFilters = useCallback(() => {
+    clearFilters()
+    setAIRiskFilter(null)
+    // Also clear search
+    handleSearchChange("")
+  }, [clearFilters, handleSearchChange])
   
   const hasActiveFilters = Object.values(filters).some(v => v !== "")
+  const hasAnyFilter = hasActiveFilters || aiRiskFilter !== null || debouncedQuery.trim() !== ""
 
   const handleLogout = () => {
     onLogout()
     navigate("/")
   }
+
+  const handleAIRiskFilter = useCallback((data: AIRiskFilterData | null) => {
+    setAIRiskFilter(data)
+    // Scroll table to top when AI filter is applied
+    if (data && tableRef.current) {
+      tableRef.current.scrollTop = 0
+      setShowScrollHint(false)
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -178,6 +241,42 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
               </h2>
               <p className="text-muted-foreground">Manage and monitor employee health risk profiles</p>
             </div>
+
+            {/* AI Risk Filter Banner */}
+            {aiRiskFilter && (
+              <div className="animate-slide-up">
+                <Card className="border-primary/30 bg-primary/5 backdrop-blur-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="rounded-lg bg-primary/15 p-2 flex-shrink-0">
+                          <Sparkles className="size-4 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-primary">
+                            AI Risk Analysis Active
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            Showing top {aiRiskFilter.entries.length} employees at risk for{" "}
+                            <span className="font-medium text-foreground">{aiRiskFilter.disease}</span>
+                            {" "}(above 30% risk score)
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAIRiskFilter(null)}
+                        className="gap-2 flex-shrink-0 border-primary/30 text-primary hover:bg-primary/10"
+                      >
+                        <X className="size-3" />
+                        Clear AI Filter
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
             
             {/* Search & Filters */}
             <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
@@ -192,17 +291,30 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                       value={query}
                     />
                   </div>
-                  <Button
-                    variant={showFilters ? "secondary" : "outline"}
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="gap-2"
-                  >
-                    <Filter className="size-4" />
-                    Filters
-                    {hasActiveFilters && (
-                      <span className="size-2 rounded-full bg-primary" />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={showFilters ? "secondary" : "outline"}
+                      onClick={() => setShowFilters(!showFilters)}
+                      className="gap-2"
+                    >
+                      <Filter className="size-4" />
+                      Filters
+                      {hasActiveFilters && (
+                        <span className="size-2 rounded-full bg-primary" />
+                      )}
+                    </Button>
+                    {hasAnyFilter && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllFilters}
+                        className="gap-1.5 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3" />
+                        Clear all
+                      </Button>
                     )}
-                  </Button>
+                  </div>
                 </div>
                 
                 {/* Simplified Filter Panel */}
@@ -331,7 +443,16 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
             <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
               <CardHeader className="pb-0">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Employee Registry</CardTitle>
+                  <CardTitle className="text-lg">
+                    {aiRiskFilter ? (
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="size-4 text-primary" />
+                        {aiRiskFilter.disease} Risk Analysis
+                      </span>
+                    ) : (
+                      "Employee Registry"
+                    )}
+                  </CardTitle>
                   <span className="text-sm text-muted-foreground">
                     {filteredMembers.length} of {members.length} employees
                   </span>
@@ -339,14 +460,24 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="relative rounded-xl border border-border/50 overflow-hidden">
-                  {/* Table Header */}
-                  <div className="grid grid-cols-[2fr_1fr_0.5fr_0.5fr_auto] gap-4 bg-muted/40 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span>Name</span>
-                    <span>Department</span>
-                    <span className="text-center">Age</span>
-                    <span className="text-center">Gender</span>
-                    <span className="text-right">Action</span>
-                  </div>
+                  {/* Table Header — changes based on whether AI filter is active */}
+                  {aiRiskFilter ? (
+                    <div className="grid grid-cols-[0.4fr_2fr_1fr_0.7fr_auto] gap-4 bg-primary/5 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-primary/20">
+                      <span className="text-center text-primary">#</span>
+                      <span>Name</span>
+                      <span>Department</span>
+                      <span className="text-center text-primary">Risk Score</span>
+                      <span className="text-right">Action</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-[2fr_1fr_0.5fr_0.5fr_auto] gap-4 bg-muted/40 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span>Name</span>
+                      <span>Department</span>
+                      <span className="text-center">Age</span>
+                      <span className="text-center">Gender</span>
+                      <span className="text-right">Action</span>
+                    </div>
+                  )}
                   
                   {/* Scroll indicator */}
                   {showScrollHint && filteredMembers.length > 8 && (
@@ -367,8 +498,67 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                       <div className="px-4 py-12 text-center text-muted-foreground">
                         <Search className="mx-auto size-8 mb-3 opacity-50" />
                         <p>No employees match your criteria</p>
+                        {aiRiskFilter && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={() => setAIRiskFilter(null)}
+                            className="mt-2 text-primary"
+                          >
+                            Clear AI filter
+                          </Button>
+                        )}
                       </div>
+                    ) : aiRiskFilter ? (
+                      /* AI Risk-filtered rows — with rank + risk score column */
+                      filteredMembers.map((member, i) => {
+                        const riskScore = aiRiskMap?.get(member.id) ?? 0
+                        return (
+                          <div
+                            key={member.id}
+                            className="group transition-smooth hover:bg-primary/5 animate-slide-up"
+                            style={{ animationDelay: `${Math.min(i * 40, 400)}ms` }}
+                          >
+                            <div className="grid grid-cols-[0.4fr_2fr_1fr_0.7fr_auto] gap-4 p-4 items-center">
+                              {/* Rank */}
+                              <div className="flex items-center justify-center">
+                                <span className="text-xs font-bold text-muted-foreground w-6 h-6 rounded-full bg-muted/50 flex items-center justify-center">
+                                  {i + 1}
+                                </span>
+                              </div>
+                              {/* Name + email */}
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{member.fullName}</p>
+                                <p className="text-xs text-muted-foreground truncate">{member.email}</p>
+                              </div>
+                              {/* Department */}
+                              <p className="text-sm text-muted-foreground truncate">{member.department}</p>
+                              {/* Risk Score */}
+                              <div className="flex items-center justify-center">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold metric-value ${getRiskScoreColor(riskScore)} ${getRiskScoreBg(riskScore)}`}
+                                >
+                                  {riskScore.toFixed(1)}%
+                                </span>
+                              </div>
+                              {/* Action */}
+                              <div className="flex items-center gap-2 justify-end">
+                                <Button
+                                  onClick={() => navigate(`/dashboard/employee/${member.id}`)}
+                                  size="sm"
+                                  variant="outline"
+                                  className="opacity-70 group-hover:opacity-100 transition-opacity"
+                                >
+                                  Details
+                                  <ArrowRight className="ml-1 size-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })
                     ) : (
+                      /* Normal rows */
                       filteredMembers.map((member, i) => (
                         <div
                           key={member.id}
@@ -407,7 +597,11 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
           {/* Right Column - AI Chat Sidebar */}
           <div className="hidden lg:block w-80 xl:w-96 flex-shrink-0">
             <div className="sticky top-24">
-              <AIChatSidebar />
+              <AIChatSidebar
+                members={members}
+                onAIRiskFilter={handleAIRiskFilter}
+                activeFilter={aiRiskFilter}
+              />
             </div>
           </div>
         </div>

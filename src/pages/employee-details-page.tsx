@@ -62,6 +62,10 @@ export function EmployeeDetailsPage({ members }: { members: MemberRiskRecord[] }
   }
   
   const mailtoLink = `mailto:${employee.email}?subject=${encodeURIComponent(getEmailSubject())}&body=${getEmailBody()}`
+
+  const handleSendEmailClick = () => {
+    window.open(mailtoLink, "_blank", "noopener,noreferrer")
+  }
   
   return (
     <div className="min-h-screen bg-background">
@@ -117,13 +121,14 @@ export function EmployeeDetailsPage({ members }: { members: MemberRiskRecord[] }
                 
                 {/* Action Buttons */}
                 <div className="flex gap-2">
-                  <a 
-                    href={mailtoLink}
+                  <button
+                    type="button"
+                    onClick={handleSendEmailClick}
                     className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
                   >
                     <Mail className="mr-2 size-4" />
                     Send Email
-                  </a>
+                  </button>
                 </div>
               </div>
             </CardContent>

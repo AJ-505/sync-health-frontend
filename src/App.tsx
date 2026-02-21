@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   BrowserRouter,
   Navigate,
@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 
 import { Button } from "@/components/ui/button"
 import { ThemeProvider } from "@/components/theme-provider"
-import { apiClient, type User } from "@/lib/api"
+import { ApiRequestError, apiClient, type User } from "@/lib/api"
 import { mapGetAllEmployeesResponseToMembers } from "@/lib/employee-records"
 import {
   LandingPage,
@@ -29,14 +29,13 @@ const queryClient = new QueryClient({
 })
 
 const USER_STORAGE_KEY = "sync-health-user"
-const TOKEN_STORAGE_KEY = "sync-health-token"
+const LEGACY_TOKEN_STORAGE_KEY = "sync-health-token"
 
 function readStoredUser(): User | null {
-  const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+  localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
   const storedUser = localStorage.getItem(USER_STORAGE_KEY)
 
-  if (!token || !storedUser) {
-    localStorage.removeItem(USER_STORAGE_KEY)
+  if (!storedUser) {
     return null
   }
 
@@ -44,16 +43,26 @@ function readStoredUser(): User | null {
     const parsed = JSON.parse(storedUser)
     if (!parsed || typeof parsed !== "object") {
       localStorage.removeItem(USER_STORAGE_KEY)
-      localStorage.removeItem(TOKEN_STORAGE_KEY)
       return null
     }
 
     return parsed as User
   } catch {
     localStorage.removeItem(USER_STORAGE_KEY)
-    localStorage.removeItem(TOKEN_STORAGE_KEY)
     return null
   }
+}
+
+function isUnauthorizedError(error: unknown): boolean {
+  if (error instanceof ApiRequestError) {
+    return error.statusCode === 401
+  }
+
+  if (error instanceof Error) {
+    return /could not validate credentials|not authenticated|unauthorized/i.test(error.message)
+  }
+
+  return false
 }
 
 // ============================================================================
@@ -100,7 +109,19 @@ function AppRoutes({ isAuthenticated, user, onLogin, onLogout }: AppRoutesProps)
     queryFn: () => apiClient.getAllEmployees(),
     enabled: isAuthenticated,
     select: mapGetAllEmployeesResponseToMembers,
+    retry: (failureCount, error) =>
+      !isUnauthorizedError(error) && failureCount < 1,
   })
+  const hasUnauthorizedError =
+    isAuthenticated &&
+    employeesQuery.isError &&
+    isUnauthorizedError(employeesQuery.error)
+
+  useEffect(() => {
+    if (hasUnauthorizedError) {
+      onLogout()
+    }
+  }, [hasUnauthorizedError, onLogout])
 
   const members = employeesQuery.data ?? []
   const employeeDataError =
@@ -116,6 +137,9 @@ function AppRoutes({ isAuthenticated, user, onLogin, onLogout }: AppRoutesProps)
       } />
       <Route path="/dashboard" element={
         isAuthenticated ? (
+          hasUnauthorizedError ? (
+            <Navigate replace to="/login" />
+          ) : (
           employeesQuery.isPending ? (
             <EmployeeDataLoadingState />
           ) : employeesQuery.isError ? (
@@ -123,18 +147,23 @@ function AppRoutes({ isAuthenticated, user, onLogin, onLogout }: AppRoutesProps)
           ) : (
             <DashboardOverviewPage members={members} user={user!} onLogout={onLogout} />
           )
+          )
         ) : (
           <Navigate replace to="/login" />
         )
       } />
       <Route path="/dashboard/employee/:employeeId" element={
         isAuthenticated ? (
+          hasUnauthorizedError ? (
+            <Navigate replace to="/login" />
+          ) : (
           employeesQuery.isPending ? (
             <EmployeeDataLoadingState />
           ) : employeesQuery.isError ? (
             <EmployeeDataErrorState message={employeeDataError} onRetry={employeesQuery.refetch} />
           ) : (
             <EmployeeDetailsPage members={members} />
+          )
           )
         ) : (
           <Navigate replace to="/login" />
@@ -151,19 +180,23 @@ function AppRoutes({ isAuthenticated, user, onLogin, onLogout }: AppRoutesProps)
 
 export function App() {
   const [user, setUser] = useState<User | null>(readStoredUser)
-  const isAuthenticated = user !== null && Boolean(localStorage.getItem(TOKEN_STORAGE_KEY))
+  const isAuthenticated = user !== null
 
-  const handleLogin = (userData: User) => {
+  const handleLogin = useCallback((userData: User) => {
     setUser(userData)
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData))
-  }
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
+  }, [])
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
+    void apiClient.logout().catch(() => {
+      // Session might already be gone; still clear local user state.
+    })
     setUser(null)
     localStorage.removeItem(USER_STORAGE_KEY)
-    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY)
     queryClient.removeQueries({ queryKey: ["employees", "all"] })
-  }
+  }, [])
 
   return (
     <QueryClientProvider client={queryClient}>

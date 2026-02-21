@@ -427,3 +427,30 @@
 .animate-progress {
   animation: progress-fill 1s ease-out forwards;
 }
+
+/* AI Chat typing dots animation */
+.ai-typing-dots {
+  display: inline-flex;
+  gap: 0;
+}
+
+.ai-dot {
+  animation: ai-dot-pulse 1.4s ease-in-out infinite;
+  opacity: 0.3;
+}
+
+@keyframes ai-dot-pulse {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+/* AI risk score shimmer on initial load */
+@keyframes risk-score-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.risk-score-shimmer {
+  background-size: 200% 100%;
+  animation: risk-score-shimmer 2s ease-in-out;
+}
