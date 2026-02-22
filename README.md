@@ -1,6 +1,8 @@
-# Sync Health Frontend
+# Sync Health
 
 Frontend for the corporate chronic disease risk prediction platform.
+
+### **Kindly Note:** For ease of development, task splitting and hosting, the backend was developed in a separate repo. Please view it [here](https://github.com/AJ-505/sync-health-backend)
 
 Product theme: **Data -> Prevention**  
 PRD source of truth: `docs/PRD.md`
