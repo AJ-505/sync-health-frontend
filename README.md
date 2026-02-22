@@ -44,6 +44,13 @@ pnpm dev
 
 App runs on the Vite dev URL shown in terminal (usually `http://localhost:5173`).
 
+## Demo Login
+
+To quickly try the app, use the demo credentials shown on the login page:
+
+- Email/username: `jennie@chowstack.ng`
+- Password: `ChangeMe!2026`
+
 ## Available Scripts
 
 - `pnpm dev` - Start local dev server

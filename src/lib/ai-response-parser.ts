@@ -38,6 +38,47 @@ function isStructuredShape(
 }
 
 /**
+ * Extract a plain user-facing message from non-structured object payloads.
+ * Handles envelopes like { result: "..." } and validation shapes.
+ */
+function extractTextMessage(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null
+  const obj = value as Record<string, unknown>
+
+  const candidateKeys = ["result", "message", "error", "text", "response"]
+  for (const key of candidateKeys) {
+    const candidate = obj[key]
+    if (typeof candidate === "string" && candidate.trim() !== "") {
+      return candidate.trim()
+    }
+  }
+
+  const detail = obj.detail
+  if (typeof detail === "string" && detail.trim() !== "") {
+    return detail.trim()
+  }
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === "string") return item.trim()
+        if (item && typeof item === "object") {
+          const msg = (item as Record<string, unknown>).msg
+          return typeof msg === "string" ? msg.trim() : ""
+        }
+        return ""
+      })
+      .filter((item) => item.length > 0)
+
+    if (messages.length > 0) {
+      return messages.join(", ")
+    }
+  }
+
+  return null
+}
+
+/**
  * Normalize the API response into either a structured object or a plain string.
  *
  * The backend Swagger declares the 200 response as type "string", which means
@@ -47,6 +88,7 @@ function isStructuredShape(
  * This function handles all three shapes:
  *   - Already an object with scored_employees -> return as-is
  *   - A string containing JSON with scored_employees -> parse and return object
+ *   - A plain object envelope with message/result -> return extracted string
  *   - A plain string -> return as-is
  */
 export function normalizeAIResponse(
@@ -59,6 +101,10 @@ export function normalizeAIResponse(
   // Case 1: Already a parsed object
   if (typeof raw !== "string") {
     if (isStructuredShape(raw)) return raw
+
+    const extracted = extractTextMessage(raw)
+    if (extracted) return extracted
+
     // Unknown object shape — stringify for display
     try {
       const serialized = JSON.stringify(raw)
@@ -79,6 +125,8 @@ export function normalizeAIResponse(
         try {
           const doubleParsed: unknown = JSON.parse(parsed)
           if (isStructuredShape(doubleParsed)) return doubleParsed
+          const extracted = extractTextMessage(doubleParsed)
+          if (extracted) return extracted
         } catch {
           // Not double-encoded, that's fine
         }
@@ -87,6 +135,8 @@ export function normalizeAIResponse(
       }
 
       if (isStructuredShape(parsed)) return parsed
+      const extracted = extractTextMessage(parsed)
+      if (extracted) return extracted
 
       // Parsed to some other shape — return the original string
       return raw
