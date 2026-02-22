@@ -5,18 +5,6 @@ Frontend for the corporate chronic disease risk prediction platform.
 Product theme: **Data -> Prevention**  
 PRD source of truth: `docs/PRD.md`
 
-## What This App Does
-
-- Authenticates HR users against the backend (`/auth/login`)
-- Fetches and displays employee records (`/filter/employees/all`)
-- Supports dashboard filtering by:
-  - gender
-  - department
-  - age range
-  - weight range
-- Shows employee-level health/risk details
-- Supports light/dark/system theming
-
 ## Tech Stack
 
 - React 19 + TypeScript
