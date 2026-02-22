@@ -5,7 +5,7 @@ Frontend for the corporate disease risk prediction and prevention platform.
 ### **Kindly Note:** For ease of development, task splitting and hosting, the backend was developed in a separate repo. Please view it [here.](https://github.com/AJ-505/sync-health-backend)
 
 ## Video Demo
-[![Watch the video](sync-health-capture.png)](sync-health-video.mp4)
+[![Watch the video](sync-health-capture.png)](https://github.com/user-attachments/assets/23666592-5746-4651-b60e-5f36efff938e)
 
 ## Demo Login
 
