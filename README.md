@@ -1,11 +1,26 @@
 # Sync Health
 
-Frontend for the corporate chronic disease risk prediction platform.
+Frontend for the corporate disease risk prediction and prevention platform.
 
-### **Kindly Note:** For ease of development, task splitting and hosting, the backend was developed in a separate repo. Please view it [here](https://github.com/AJ-505/sync-health-backend)
+### **Kindly Note:** For ease of development, task splitting and hosting, the backend was developed in a separate repo. Please view it [here.](https://github.com/AJ-505/sync-health-backend)
 
-Product theme: **Data -> Prevention**  
-PRD source of truth: `docs/PRD.md`
+## Video Demo
+[![Watch the video](sync-health-capture.png)](sync-health-video.mp4)
+
+## Demo Login
+
+To quickly try the app, use the demo credentials shown on the login page:
+
+- Email/username: `jennie@chowstack.ng`
+- Password: `ChangeMe!2026`
+
+## Core Features
+
+- Employee registry with health profile and demographic context.
+- Smart filtering by age, department, weight, gender, and search.
+- Disease risk assessment for hypertension, diabetes, and cardiovascular risk.
+- AI-assisted risk analysis that can rank relevant employees in the dashboard.
+- Direct outreach actions, including contextual email drafts for selected at-risk groups.
 
 ## Tech Stack
 
@@ -30,7 +45,7 @@ PRD source of truth: `docs/PRD.md`
 pnpm install
 ```
 
-2. Create `.env` (or update existing) and set backend URL:
+2. Create `.env` and set backend URL:
 
 ```bash
 VITE_PUBLIC_BACKEND_URL=https://sync-health-backend-production.up.railway.app
@@ -43,13 +58,6 @@ pnpm dev
 ```
 
 App runs on the Vite dev URL shown in terminal (usually `http://localhost:5173`).
-
-## Demo Login
-
-To quickly try the app, use the demo credentials shown on the login page:
-
-- Email/username: `jennie@chowstack.ng`
-- Password: `ChangeMe!2026`
 
 ## Available Scripts
 
@@ -66,42 +74,3 @@ This frontend is aligned with the FastAPI OpenAPI contract provided for:
 - `POST /auth/login`
 - `GET /filter/employees`
 - `GET /filter/employees/all`
-
-### Login payload
-
-`POST /auth/login` sends:
-
-```json
-{
-  "username_or_email": "string",
-  "password": "string"
-}
-```
-
-Auth token handling:
-
-- Reads/writes token key: `sync-health-token`
-- Reads/writes user key: `sync-health-user`
-
-## Project Structure (Key Files)
-
-- `src/App.tsx` - App root, routing, auth/session gating, employee query lifecycle
-- `src/pages/` - Page-level UI (`landing`, `login`, `dashboard`, `employee-details`)
-- `src/lib/api/client.ts` - API client and endpoint calls
-- `src/lib/api/types.ts` - API request/response contracts
-- `src/lib/employee-records.ts` - Maps backend employee payloads to UI member records
-- `src/components/` - shared UI components/theme provider
-
-## Validation Checklist (Before Handoff)
-
-Run both commands:
-
-```bash
-pnpm lint
-pnpm build
-```
-
-## Notes
-
-- Theme initialization is applied before React hydration in `index.html` to avoid light/dark flash.
-- Keep scope and feature behavior aligned with `docs/PRD.md`.
