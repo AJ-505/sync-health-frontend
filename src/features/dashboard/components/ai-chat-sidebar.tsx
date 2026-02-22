@@ -7,7 +7,8 @@ import { apiClient } from "@/lib/api/client"
 import { ApiRequestError } from "@/lib/api/client"
 import type { ChatMessage, AIRiskFilterData } from "@/lib/api"
 import type { MemberRiskRecord } from "@/lib/chowdeck-members"
-import { parseAIRiskResponse } from "@/lib/ai-response-parser"
+import { parseAIRiskResponse, formatAIResponseForChat } from "@/lib/ai-response-parser"
+import { cn } from "@/lib/utils"
 
 let messageIdCounter = 0
 function nextMessageId(): string {
@@ -27,6 +28,7 @@ interface AIChatSidebarProps {
   members: MemberRiskRecord[]
   onAIRiskFilter: (data: AIRiskFilterData | null) => void
   activeFilter: AIRiskFilterData | null
+  className?: string
 }
 
 function TypingIndicator() {
@@ -38,7 +40,7 @@ function TypingIndicator() {
       <div className="flex-1 min-w-0">
         <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-muted/50 text-sm text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
-          <span className="ai-typing-text">Analysing health data</span>
+          <span>Analysing health data</span>
           <span className="ai-typing-dots">
             <span className="ai-dot">.</span>
             <span className="ai-dot" style={{ animationDelay: "0.2s" }}>.</span>
@@ -82,7 +84,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   )
 }
 
-export function AIChatSidebar({ members, onAIRiskFilter, activeFilter }: AIChatSidebarProps) {
+export function AIChatSidebar({
+  members,
+  onAIRiskFilter,
+  activeFilter,
+  className,
+}: AIChatSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING_MESSAGE])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -120,29 +127,30 @@ export function AIChatSidebar({ members, onAIRiskFilter, activeFilter }: AIChatS
     try {
       const response = await apiClient.analyseWithAI(prompt)
 
+      // Try to parse structured risk data from the response
+      const riskData = parseAIRiskResponse(response, prompt, members)
+
+      // Format the response as human-readable text for the chat bubble
+      const chatText = formatAIResponseForChat(response, members)
+
       // Add AI response message
       const assistantMessage: ChatMessage = {
         id: nextMessageId(),
         role: "assistant",
-        content: typeof response === "string" ? response : JSON.stringify(response),
+        content: chatText,
         timestamp: Date.now(),
       }
-
       setMessages((prev) => [...prev, assistantMessage])
 
-      // Try to parse risk data from the response
-      const responseText = typeof response === "string" ? response : JSON.stringify(response)
-      const riskData = parseAIRiskResponse(responseText, prompt, members)
-
       if (riskData) {
-        // We found risk data — push it up to the dashboard
+        // Push risk data up to the dashboard to update the table
         onAIRiskFilter(riskData)
 
-        // Append a system-like message informing the user about the filter
+        // Append a notification message about the table update
         const filterNote: ChatMessage = {
           id: nextMessageId(),
           role: "assistant",
-          content: `I've updated the employee table to show the top ${riskData.entries.length} employees at risk for ${riskData.disease} (above 30% risk score). You can clear this filter anytime.`,
+          content: `I've updated the employee table to show the top ${riskData.entries.length} employees at risk for ${riskData.disease}. You can clear this filter anytime.`,
           timestamp: Date.now(),
         }
         setMessages((prev) => [...prev, filterNote])
@@ -186,7 +194,12 @@ export function AIChatSidebar({ members, onAIRiskFilter, activeFilter }: AIChatS
   }, [onAIRiskFilter])
 
   return (
-    <Card className="border-border/50 bg-card/80 backdrop-blur-sm h-[calc(100vh-8rem)] flex flex-col">
+    <Card
+      className={cn(
+        "border-border/50 bg-card/80 backdrop-blur-sm flex flex-col",
+        className ?? "h-[calc(100vh-8rem)]"
+      )}
+    >
       <CardHeader className="pb-3 border-b border-border/50 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-primary/15 p-2">

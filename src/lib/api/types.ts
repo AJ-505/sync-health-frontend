@@ -118,8 +118,32 @@ export interface AIAnalyseRequest {
   prompt: string
 }
 
-/** The /ai/analyse endpoint returns a plain string (Gemini's text response). */
-export type AIAnalyseResponse = string
+/**
+ * A single scored employee from the backend AI pipeline.
+ * The backend returns risk_probability as a 0-1 float.
+ */
+export interface AIScoredEmployee {
+  employee_id: string
+  risk_probability: number
+  confidence: string
+  evidence: string[]
+}
+
+/**
+ * Structured response from POST /ai/analyse.
+ * The backend returns this JSON when the prompt is health-related.
+ * When the prompt is NOT health-related, the backend returns a plain string.
+ */
+export interface AIAnalyseStructuredResponse {
+  condition: string
+  scored_employees: AIScoredEmployee[]
+}
+
+/**
+ * The endpoint can return either a structured object (health query)
+ * or a plain string (non-health query / classification failure).
+ */
+export type AIAnalyseResponse = AIAnalyseStructuredResponse | string
 
 export interface ChatMessage {
   id: string
@@ -130,15 +154,21 @@ export interface ChatMessage {
 
 /**
  * Represents a single employee's AI-derived risk score for a specific disease.
- * This is parsed from the AI response and used to overlay the dashboard table.
+ * Resolved client-side from the backend's scored_employees.
  */
 export interface AIRiskEntry {
-  /** Employee name as returned by AI (used for fuzzy-matching to MemberRiskRecord) */
+  /** Employee ID from the backend (e.g. "CS-0007") */
+  employeeId: string
+  /** Resolved display name from MemberRiskRecord */
   employeeName: string
-  /** Matched MemberRiskRecord id (resolved client-side) */
+  /** Matched MemberRiskRecord id */
   memberId: string | null
   /** Risk score percentage (0-100) */
   riskScore: number
+  /** Confidence level from AI */
+  confidence: string
+  /** Evidence strings from AI */
+  evidence: string[]
 }
 
 /**
@@ -150,7 +180,7 @@ export interface AIRiskFilterData {
   disease: string
   /** Employees with their risk scores, sorted descending */
   entries: AIRiskEntry[]
-  /** The raw AI response text for reference */
+  /** The raw AI response for reference */
   rawResponse: string
 }
 

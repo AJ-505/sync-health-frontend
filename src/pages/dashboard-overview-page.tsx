@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import type { MemberRiskRecord } from "@/lib/chowdeck-members"
 import type { User, AIRiskFilterData } from "@/lib/api"
-import { AIChatSidebar } from "@/features/dashboard/components"
+import { AIChatPlaceholder, AIChatSidebar } from "@/features/dashboard/components"
 import { capitalizeFirstLetter } from "@/lib/utils"
 
 // Get unique departments from members
@@ -121,6 +121,11 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
     }
     return map
   }, [aiRiskFilter])
+
+  const hasUnmatchedAIResults = useMemo(() => {
+    if (!aiRiskFilter || aiRiskFilter.entries.length === 0) return false
+    return (aiRiskMap?.size ?? 0) === 0
+  }, [aiRiskFilter, aiRiskMap])
 
   const filteredMembers = useMemo(() => {
     const normalizedQuery = debouncedQuery.trim().toLowerCase()
@@ -497,7 +502,16 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                     {filteredMembers.length === 0 ? (
                       <div className="px-4 py-12 text-center text-muted-foreground">
                         <Search className="mx-auto size-8 mb-3 opacity-50" />
-                        <p>No employees match your criteria</p>
+                        <p>
+                          {hasUnmatchedAIResults
+                            ? "Could not match AI results to employee records."
+                            : "No employees match your criteria"}
+                        </p>
+                        {hasUnmatchedAIResults && (
+                          <p className="mt-1 text-xs text-muted-foreground/80">
+                            Check member ID matching between AI `employee_id` values and dashboard records.
+                          </p>
+                        )}
                         {aiRiskFilter && (
                           <Button
                             variant="link"
@@ -536,7 +550,7 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
                               {/* Risk Score */}
                               <div className="flex items-center justify-center">
                                 <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold metric-value ${getRiskScoreColor(riskScore)} ${getRiskScoreBg(riskScore)}`}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold metric-value risk-score-shimmer ${getRiskScoreColor(riskScore)} ${getRiskScoreBg(riskScore)}`}
                                 >
                                   {riskScore.toFixed(1)}%
                                 </span>
@@ -605,6 +619,12 @@ export function DashboardOverviewPage({ members, user, onLogout }: DashboardOver
             </div>
           </div>
         </div>
+
+        <AIChatPlaceholder
+          members={members}
+          onAIRiskFilter={handleAIRiskFilter}
+          activeFilter={aiRiskFilter}
+        />
       </main>
     </div>
   )

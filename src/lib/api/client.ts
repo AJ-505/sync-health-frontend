@@ -3,6 +3,7 @@
  */
 
 import type {
+  AIAnalyseResponse,
   ApiError,
   FilterEmployeesParams,
   FilterEmployeesResponse,
@@ -40,6 +41,19 @@ class ApiClient {
     return localStorage.getItem("sync-health-token")
   }
 
+  private async parseResponsePayload(response: Response): Promise<unknown> {
+    const text = await response.text().catch(() => "")
+    if (!text || text.trim() === "") {
+      return null
+    }
+
+    try {
+      return JSON.parse(text) as unknown
+    } catch {
+      return text
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -61,7 +75,7 @@ class ApiClient {
       headers,
     })
 
-    const payload = await response.json().catch(() => null)
+    const payload = await this.parseResponsePayload(response)
 
     if (!response.ok) {
       const error = this.toApiError(response.status, response.statusText, payload)
@@ -102,6 +116,9 @@ class ApiClient {
           message = joined
         }
       }
+    } else if (typeof payload === "string" && payload.trim() !== "") {
+      message = payload
+      details = payload
     }
 
     return {
@@ -181,8 +198,8 @@ class ApiClient {
   // AI
   // ===========================================================================
 
-  async analyseWithAI(prompt: string): Promise<string> {
-    return this.request<string>("/ai/analyse", {
+  async analyseWithAI(prompt: string): Promise<AIAnalyseResponse> {
+    return this.request<AIAnalyseResponse>("/ai/analyse", {
       method: "POST",
       body: JSON.stringify({ prompt }),
     })

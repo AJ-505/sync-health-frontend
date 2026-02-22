@@ -1,67 +1,128 @@
 /**
  * AI Response Parser
  *
- * Parses the string returned by POST /ai/analyse to extract:
- * 1. Whether the response contains risk-analysis data (employee + score pairs)
- * 2. The disease/condition being analysed
- * 3. Individual employee risk entries
+ * Handles the response from POST /ai/analyse which can be:
  *
- * The backend Gemini pipeline returns a free-form text string.
- * We parse it heuristically — looking for patterns like:
- *   "Employee Name - 72%" or "Employee Name: 72%" or "Employee Name (72%)"
- *   or tabular formats with name and percentage columns.
+ * 1. A structured JSON object (when already parsed by fetch .json()):
+ *    { condition: "...", scored_employees: [...] }
+ *
+ * 2. A JSON-encoded string (the Swagger schema says response is "string",
+ *    so the HTTP body may be a JSON string containing JSON):
+ *    '{"condition":"...","scored_employees":[...]}'
+ *
+ * 3. A plain text string (non-health queries):
+ *    "I can only answer health-related questions."
  */
 
-import type { AIRiskEntry, AIRiskFilterData } from "@/lib/api"
+import type {
+  AIAnalyseResponse,
+  AIAnalyseStructuredResponse,
+  AIScoredEmployee,
+  AIRiskEntry,
+  AIRiskFilterData,
+} from "@/lib/api"
 import type { MemberRiskRecord } from "@/lib/chowdeck-members"
 
 const RISK_SCORE_THRESHOLD = 30
+const EMPTY_AI_RESPONSE_MESSAGE = "No response received from the AI service."
 
 /**
- * Detect whether the AI response contains structured risk data
- * (i.e. employee-name + percentage pairs).
+ * Type guard: check if a value looks like our structured response.
  */
-export function containsRiskData(response: string): boolean {
-  // Look for patterns like "Name - 72%", "Name: 72%", "Name (72%)", or just "72%"
-  const percentagePattern = /\d{1,3}(?:\.\d+)?%/g
-  const matches = response.match(percentagePattern)
-  // If there are at least 2 percentage values, likely risk data
-  return matches !== null && matches.length >= 2
+function isStructuredShape(
+  value: unknown
+): value is AIAnalyseStructuredResponse {
+  if (!value || typeof value !== "object") return false
+  const obj = value as Record<string, unknown>
+  return "scored_employees" in obj && Array.isArray(obj.scored_employees)
 }
 
 /**
- * Try to extract the disease/condition the user asked about from the AI response.
- * Falls back to the original user prompt if we can't find it in the response.
+ * Normalize the API response into either a structured object or a plain string.
+ *
+ * The backend Swagger declares the 200 response as type "string", which means
+ * the HTTP body may arrive as a JSON-encoded string. When fetch's .json()
+ * parses it, we get a JavaScript string that itself contains JSON.
+ *
+ * This function handles all three shapes:
+ *   - Already an object with scored_employees -> return as-is
+ *   - A string containing JSON with scored_employees -> parse and return object
+ *   - A plain string -> return as-is
  */
-export function extractDiseaseName(aiResponse: string, userPrompt: string): string {
-  // Common diseases we support
-  const knownDiseases = [
-    "hypertension",
-    "diabetes",
-    "cardiovascular",
-    "heart disease",
-    "stroke",
-    "obesity",
-    "high cholesterol",
-    "kidney disease",
-    "asthma",
-    "thyroid",
-  ]
+export function normalizeAIResponse(
+  raw: AIAnalyseResponse
+): AIAnalyseStructuredResponse | string {
+  if (raw === null || raw === undefined) {
+    return EMPTY_AI_RESPONSE_MESSAGE
+  }
 
-  const combinedText = `${userPrompt} ${aiResponse}`.toLowerCase()
-
-  for (const disease of knownDiseases) {
-    if (combinedText.includes(disease)) {
-      // Capitalize first letter of each word
-      return disease.replace(/\b\w/g, (c) => c.toUpperCase())
+  // Case 1: Already a parsed object
+  if (typeof raw !== "string") {
+    if (isStructuredShape(raw)) return raw
+    // Unknown object shape — stringify for display
+    try {
+      const serialized = JSON.stringify(raw)
+      return serialized ?? "The AI service returned an empty response."
+    } catch {
+      return "The AI service returned an unreadable response."
     }
   }
 
-  // Fallback: try to extract from user prompt
-  const promptLower = userPrompt.toLowerCase()
-  // Look for "risk of <disease>" or "likely to have <disease>"
-  const riskOfMatch = promptLower.match(
-    /(?:risk\s+(?:of|for)|likely\s+to\s+(?:have|get|develop)|prone\s+to|susceptible\s+to)\s+(.+?)(?:\s+disease)?(?:\?|$|\.)/
+  // Case 2 & 3: It's a string. Try to parse as JSON.
+  const trimmed = raw.trim()
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed)
+
+      // Could be double-encoded (string inside string)
+      if (typeof parsed === "string") {
+        try {
+          const doubleParsed: unknown = JSON.parse(parsed)
+          if (isStructuredShape(doubleParsed)) return doubleParsed
+        } catch {
+          // Not double-encoded, that's fine
+        }
+        // The parsed string itself might be a plain message
+        return parsed
+      }
+
+      if (isStructuredShape(parsed)) return parsed
+
+      // Parsed to some other shape — return the original string
+      return raw
+    } catch {
+      // Not valid JSON — return as plain text
+      return raw
+    }
+  }
+
+  // Plain text response (non-health query)
+  return raw
+}
+
+/**
+ * Extract a human-readable disease name from the condition string.
+ */
+function extractDiseaseName(condition: string): string {
+  const knownDiseases: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /hypertension/i, label: "Hypertension" },
+    { pattern: /diabetes/i, label: "Diabetes" },
+    { pattern: /cardiovascular/i, label: "Cardiovascular Disease" },
+    { pattern: /heart\s*disease/i, label: "Heart Disease" },
+    { pattern: /stroke/i, label: "Stroke" },
+    { pattern: /obesity|obese/i, label: "Obesity" },
+    { pattern: /cholesterol/i, label: "High Cholesterol" },
+    { pattern: /kidney/i, label: "Kidney Disease" },
+    { pattern: /asthma/i, label: "Asthma" },
+    { pattern: /thyroid/i, label: "Thyroid Disorder" },
+  ]
+
+  for (const { pattern, label } of knownDiseases) {
+    if (pattern.test(condition)) return label
+  }
+
+  const riskOfMatch = condition.match(
+    /(?:risk\s+(?:of|for)|likely\s+to\s+(?:have|get|develop))\s+(.+?)(?:\?|$|\.)/i
   )
   if (riskOfMatch) {
     return riskOfMatch[1].replace(/\b\w/g, (c) => c.toUpperCase()).trim()
@@ -71,175 +132,158 @@ export function extractDiseaseName(aiResponse: string, userPrompt: string): stri
 }
 
 /**
- * Fuzzy-match an employee name from the AI response to a MemberRiskRecord.
- *
- * Strategy:
- * 1. Exact match (case-insensitive)
- * 2. The AI name is contained in the member's full name
- * 3. The member's full name is contained in the AI name
- * 4. First + last name token overlap (at least 1 matching token)
+ * Build a lookup map from employee_id -> MemberRiskRecord.
+ * Supports case-insensitive matching.
  */
-function findMatchingMember(
-  aiName: string,
+function buildMemberLookup(
   members: MemberRiskRecord[]
-): MemberRiskRecord | null {
-  const normalized = aiName.trim().toLowerCase()
-  if (!normalized) return null
-
-  // 1. Exact match
-  const exact = members.find((m) => m.fullName.toLowerCase() === normalized)
-  if (exact) return exact
-
-  // 2. Containment (either direction)
-  const contains = members.find(
-    (m) =>
-      m.fullName.toLowerCase().includes(normalized) ||
-      normalized.includes(m.fullName.toLowerCase())
-  )
-  if (contains) return contains
-
-  // 3. Token overlap — at least one first/last name token must match
-  const aiTokens = normalized.split(/\s+/).filter((t) => t.length > 1)
-  if (aiTokens.length === 0) return null
-
-  let bestMatch: MemberRiskRecord | null = null
-  let bestScore = 0
-
+): Map<string, MemberRiskRecord> {
+  const map = new Map<string, MemberRiskRecord>()
   for (const member of members) {
-    const memberTokens = member.fullName.toLowerCase().split(/\s+/)
-    let matchCount = 0
-
-    for (const aiToken of aiTokens) {
-      if (memberTokens.some((mt) => mt === aiToken || mt.includes(aiToken) || aiToken.includes(mt))) {
-        matchCount++
-      }
-    }
-
-    const score = matchCount / Math.max(aiTokens.length, memberTokens.length)
-    if (score > bestScore && matchCount >= 1) {
-      bestScore = score
-      bestMatch = member
-    }
+    map.set(normalizeMemberId(member.id), member)
   }
-
-  return bestScore >= 0.5 ? bestMatch : null
+  return map
 }
 
 /**
- * Parse the AI response text into structured risk entries.
- *
- * Handles various formats the Gemini model may return:
- * - "1. Employee Name - 72%"
- * - "Employee Name: 72%"
- * - "Employee Name (72% risk)"
- * - "| Employee Name | 72% |" (table format)
- * - "Employee Name — Risk Score: 72%"
+ * Normalize IDs for lookup consistency across backend/frontend.
  */
-function extractRiskEntries(
-  response: string,
-  members: MemberRiskRecord[]
-): AIRiskEntry[] {
-  const entries: AIRiskEntry[] = []
-  const seenMemberIds = new Set<string>()
-
-  // Split into lines for line-by-line parsing
-  const lines = response.split("\n")
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-
-    // Try multiple patterns to extract (name, score) pairs from a single line
-
-    // Pattern 1: "Name - 72%" or "Name — 72%" or "Name: 72%"
-    // Pattern 2: "1. Name - 72%" or "- Name - 72%"  (list items)
-    // Pattern 3: "| Name | 72% |" (table rows)
-    // Pattern 4: "Name (72%)" or "Name (72% risk)"
-    // Pattern 5: "Name ... Risk Score: 72%"
-    const patterns = [
-      // List items with dash/colon separator before percentage
-      /^(?:\d+[.)]\s*|-\s*|\*\s*)?(.+?)\s*[-–—:]\s*(\d{1,3}(?:\.\d+)?)\s*%/,
-      // Table row: | name | score% |
-      /^\|?\s*(.+?)\s*\|\s*(\d{1,3}(?:\.\d+)?)\s*%/,
-      // Name (score%)
-      /^(?:\d+[.)]\s*|-\s*|\*\s*)?(.+?)\s*\(\s*(\d{1,3}(?:\.\d+)?)\s*%/,
-      // "Name ... Risk Score: 72%"
-      /^(?:\d+[.)]\s*|-\s*|\*\s*)?(.+?)\s+(?:risk\s*score|score|risk)\s*[:=]\s*(\d{1,3}(?:\.\d+)?)\s*%/i,
-    ]
-
-    for (const pattern of patterns) {
-      const match = trimmed.match(pattern)
-      if (!match) continue
-
-      const rawName = match[1]
-        .replace(/\*+/g, "") // Remove markdown bold
-        .replace(/^\||\|$/g, "") // Remove table pipe chars
-        .trim()
-      const score = parseFloat(match[2])
-
-      // Skip if name looks like a header or is too short
-      if (
-        rawName.length < 2 ||
-        /^(name|employee|person|#|no\.|risk|score)/i.test(rawName)
-      ) {
-        continue
-      }
-
-      // Skip unreasonable scores
-      if (score < 0 || score > 100 || !Number.isFinite(score)) {
-        continue
-      }
-
-      const member = findMatchingMember(rawName, members)
-      const memberId = member?.id ?? null
-
-      // Avoid duplicates for the same member
-      if (memberId && seenMemberIds.has(memberId)) continue
-      if (memberId) seenMemberIds.add(memberId)
-
-      entries.push({
-        employeeName: member?.fullName ?? rawName,
-        memberId,
-        riskScore: Math.round(score * 10) / 10,
-      })
-
-      break // Only match the first pattern per line
-    }
-  }
-
-  return entries
+function normalizeMemberId(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase()
 }
 
 /**
- * Main entry point: parse an AI response into a full AIRiskFilterData object.
+ * Make debug logging safe for arbitrary response shapes.
+ */
+function toPreview(value: unknown): string {
+  if (typeof value === "string") {
+    return value.slice(0, 200)
+  }
+
+  try {
+    const serialized = JSON.stringify(value)
+    return (serialized ?? String(value)).slice(0, 200)
+  } catch {
+    return String(value).slice(0, 200)
+  }
+}
+
+/**
+ * Main entry point: convert a raw AI API response into AIRiskFilterData.
  *
- * Returns null if the response doesn't contain parseable risk data.
+ * Returns null if the response is not a structured risk analysis.
  */
 export function parseAIRiskResponse(
-  aiResponse: string,
+  raw: AIAnalyseResponse,
   userPrompt: string,
   members: MemberRiskRecord[]
 ): AIRiskFilterData | null {
-  if (!containsRiskData(aiResponse)) {
+  console.warn("[AI Parser] Raw /ai/analyse response received", {
+    type: raw === null ? "null" : typeof raw,
+    preview: toPreview(raw),
+  })
+
+  const response = normalizeAIResponse(raw)
+  console.warn("[AI Parser] normalizeAIResponse result", {
+    type: typeof response === "string" ? "string" : "object",
+  })
+
+  // If it normalized to a string, there's no structured data
+  if (typeof response === "string") return null
+
+  if (!response.scored_employees || response.scored_employees.length === 0) {
     return null
   }
 
-  const disease = extractDiseaseName(aiResponse, userPrompt)
-  const allEntries = extractRiskEntries(aiResponse, members)
+  const disease = extractDiseaseName(response.condition || userPrompt)
+  const memberLookup = buildMemberLookup(members)
+  const availableMemberIds = members.map((member) => member.id)
 
-  // Filter to entries above threshold and that we could match to a member
-  const filtered = allEntries
-    .filter((e) => e.memberId !== null && e.riskScore >= RISK_SCORE_THRESHOLD)
-    .sort((a, b) => b.riskScore - a.riskScore)
-    .slice(0, 10) // Top 10
+  const entries: AIRiskEntry[] = []
 
-  if (filtered.length === 0) {
-    return null
+  for (const scored of response.scored_employees) {
+    // Convert 0-1 probability to 0-100 percentage
+    const riskScore = Math.round(scored.risk_probability * 100 * 10) / 10
+
+    if (riskScore < RISK_SCORE_THRESHOLD) continue
+
+    const normalizedEmployeeId = normalizeMemberId(scored.employee_id)
+    const member = memberLookup.get(normalizedEmployeeId) ?? null
+
+    if (!member) {
+      console.warn("[AI Parser] Failed to match scored employee to member record", {
+        employeeId: scored.employee_id,
+        normalizedEmployeeId,
+        availableMemberIds,
+      })
+    }
+
+    entries.push({
+      employeeId: scored.employee_id,
+      employeeName: member?.fullName ?? scored.employee_id,
+      memberId: member?.id ?? null,
+      riskScore,
+      confidence: scored.confidence ?? "unknown",
+      evidence: scored.evidence ?? [],
+    })
   }
+
+  entries.sort((a, b) => b.riskScore - a.riskScore)
+  const topEntries = entries.slice(0, 10)
+
+  if (topEntries.length === 0) return null
 
   return {
     disease,
-    entries: filtered,
-    rawResponse: aiResponse,
+    entries: topEntries,
+    rawResponse: JSON.stringify(response, null, 2),
   }
+}
+
+/**
+ * Format the AI response as a human-readable chat message.
+ * Converts structured risk data into a readable summary with employee names.
+ */
+export function formatAIResponseForChat(
+  raw: AIAnalyseResponse,
+  members: MemberRiskRecord[]
+): string {
+  const response = normalizeAIResponse(raw)
+
+  // Plain string response (non-health query)
+  if (typeof response === "string") return response
+
+  const { scored_employees } = response
+
+  if (!scored_employees || scored_employees.length === 0) {
+    return "I analysed your query but found no employees with significant risk scores."
+  }
+
+  const memberLookup = buildMemberLookup(members)
+
+  const formatEmployee = (emp: AIScoredEmployee): string => {
+    const member = memberLookup.get(normalizeMemberId(emp.employee_id))
+    return member ? member.fullName : emp.employee_id
+  }
+
+  const lines: string[] = [
+    "Here are the employees identified with significant risk:",
+    "",
+  ]
+
+  for (let i = 0; i < scored_employees.length; i++) {
+    const emp = scored_employees[i]
+    const pct = Math.round(emp.risk_probability * 100)
+    const name = formatEmployee(emp)
+    lines.push(`${i + 1}. ${name} — ${pct}% risk`)
+
+    if (emp.evidence && emp.evidence.length > 0) {
+      const topEvidence = emp.evidence.slice(0, 2)
+      for (const ev of topEvidence) {
+        lines.push(`   • ${ev}`)
+      }
+    }
+  }
+
+  return lines.join("\n").trim()
 }
