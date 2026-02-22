@@ -18,7 +18,7 @@ To quickly try the app, use the demo credentials shown on the login page:
 
 - Employee registry with health profile and demographic context.
 - Smart filtering by age, department, weight, gender, and search.
-- Disease risk assessment for hypertension, diabetes, and cardiovascular risk.
+- AI-powered disease risk assessment for a variety of diseases.
 - AI-assisted risk analysis that can rank relevant employees in the dashboard.
 - Direct outreach actions, including contextual email drafts for selected at-risk groups.
 
